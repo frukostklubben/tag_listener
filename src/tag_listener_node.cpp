@@ -16,8 +16,9 @@
 #include <stdlib.h>
 #include <vector>
 #include <time.h>
+#include <stdio.h>
 
-// name of all the transforms recieved from ar_track_alvar
+// name of all the transforms received from ar_track_alvar
 std::string transNameArray[] = {"ar_transform_0", "ar_transform_1", "ar_transform_2", "ar_transform_3",
 		"ar_transform_4", "ar_transform_5"};
 
@@ -67,6 +68,8 @@ visualization_msgs::Marker makeMarker(const tf::StampedTransform tagTransform, s
 	marker.color.g = green;
 	marker.color.b = blue;
 	marker.color.a = alpha; // alpha = opacity
+
+	printf("Marker created for box ");
 
 	return marker;
 
@@ -126,6 +129,7 @@ int main(int argc, char **argv)
 	{
 		for (int looper = 0 ; looper < 5 ; looper++)
 		{
+			std::cout << looper + "\n";
 			if (tagListener.waitForTransform("/map", transNameArray[looper], ros::Time(0), ros::Duration(0.1)))
 			{
 				try {
@@ -136,7 +140,7 @@ int main(int argc, char **argv)
 					ros::Duration(1.0).sleep();
 				}
 				markerArray.markers.at(looper) = makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1);
-
+				std::cout << "Publishing";
 				posePublisher.publish(markerArray);
 			} // end of if
 		} // end of for
