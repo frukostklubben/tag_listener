@@ -123,7 +123,7 @@ int main(int argc, char **argv)
 	ros::Publisher posePublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 1000);
 
 	// Set the ros looping rate to 10Hz
-	ros::Rate loop_rate(10);
+	ros::Rate loop_rate(1);
 
 	while(ros::ok())
 	{
@@ -133,12 +133,18 @@ int main(int argc, char **argv)
 			{
 
 				tagListener.lookupTransform("/map", transNameArray[looper], ros::Time(0), transArray[looper]);
-				markerArray.markers.at(looper) = makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1);
-
+				if (markerArray.markers.size() == 6)
+				{
+					markerArray.markers.pop_back();
+					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
+				}
+				else
+				{
+					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
+				}
 
 			} // end of if
 		} // end of for
-		printf("Publishing");
 		posePublisher.publish(markerArray);
 
 

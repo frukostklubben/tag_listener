@@ -31,7 +31,7 @@ std::string markerNameArray[] = {"marker_0", "marker_1", "marker_2",
 		"marker_3", "marker_4", "marker_5"};
 
 // array to be filled with corresponding markers
-visualization_msgs::MarkerArray markerArray;
+visualization_msgs::Marker markerArray[6];
 
 
 // create all the transforms for all the markers and place them in an array
@@ -123,7 +123,7 @@ int main(int argc, char **argv)
 	ros::Publisher posePublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 1000);
 
 	// Set the ros looping rate to 10Hz
-	ros::Rate loop_rate(10);
+	ros::Rate loop_rate(1);
 
 	while(ros::ok())
 	{
@@ -131,19 +131,14 @@ int main(int argc, char **argv)
 		{
 			if (tagListener.waitForTransform("/map", transNameArray[looper], ros::Time(0), ros::Duration(0.1)))
 			{
-				try {
-					tagListener.lookupTransform("/map", transNameArray[looper], ros::Time(0), transArray[looper]);
-				}
-				catch (tf::TransformException ex){
-					ROS_ERROR("%s", ex.what());
-					ros::Duration(1.0).sleep();
-				}
-				markerArray.markers.at(looper) = makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1);
-				printf("Publishing");
-				posePublisher.publish(markerArray);
+
+				tagListener.lookupTransform("/map", transNameArray[looper], ros::Time(0), transArray[looper]);
+				markerArray[looper] = makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1);
+
+
 			} // end of if
-			printf("Looping");
 		} // end of for
+		posePublisher.publish(markerArray);
 
 
 
