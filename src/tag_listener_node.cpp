@@ -8,6 +8,12 @@
  */
 
 
+// ******************************************
+	//See line 146 (maybe) for POS if test that breaks everything.
+//
+
+
+
 #include "ros/ros.h"
 #include "visualization_msgs/Marker.h"
 #include "visualization_msgs/MarkerArray.h"
@@ -18,9 +24,18 @@
 #include <time.h>
 #include <stdio.h>
 
+//****************************************************************************
+
+// Config stuff, muy importante!
+
+std::string frame_id = "/camera_link"; //the frame where you want your marker, the frame in makeMarker needs to be changed manually!
+
+//****************************************************************************
+
+
 // name of all the transforms received from ar_track_alvar
-std::string transNameArray[] = {"ar_transform_0", "ar_transform_1", "ar_transform_2", "ar_transform_3",
-		"ar_transform_4", "ar_transform_5"};
+std::string transNameArray[] = {"/ar_transform_0", "/ar_transform_1", "/ar_transform_2", "/ar_transform_3",
+		"/ar_transform_4", "/ar_transform_5"};
 
 // internal names of all the transforms
 std::string transMarkerNameArray[] = {"transform_marker_0", "transform_marker_1", "transform_marker_2",
@@ -48,7 +63,7 @@ visualization_msgs::Marker makeMarker(const tf::StampedTransform tagTransform, s
 
 	visualization_msgs::Marker marker;
 
-	marker.header.frame_id = "map";
+	marker.header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front. 
 	marker.header.stamp = ros::Time();
 	marker.ns = name;
 	marker.id = id;
@@ -68,8 +83,6 @@ visualization_msgs::Marker makeMarker(const tf::StampedTransform tagTransform, s
 	marker.color.g = green;
 	marker.color.b = blue;
 	marker.color.a = alpha; // alpha = opacity
-
-	printf("Marker created for box ");
 
 	return marker;
 
@@ -122,22 +135,24 @@ int main(int argc, char **argv)
 
 	ros::Publisher posePublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 1000);
 
-	// Set the ros looping rate to 10Hz
-	ros::Rate loop_rate(1);
+	// Set the ros looping rate to 20Hz
+	ros::Rate loop_rate(20);
 
 	while(ros::ok())
 	{
 		for (int looper = 0 ; looper < 5 ; looper++)
 		{
-			if (tagListener.waitForTransform("/map", transNameArray[looper], ros::Time(0), ros::Duration(0.1)))
+			// The if test below always returns true, which breaks absolutely everything, needs to be fixed!!!
+			if (tagListener.waitForTransform( frame_id, transNameArray[looper], ros::Time(0), ros::Duration(0.5))); 
 			{
-
-				tagListener.lookupTransform("/map", transNameArray[looper], ros::Time(0), transArray[looper]);
+				std::cout << "yolo";
+				break;
+				tagListener.lookupTransform( frame_id, transNameArray[looper], ros::Time(0).now(), transArray[looper]);
 				if (markerArray.markers.size() == 6)
 				{
 					markerArray.markers.pop_back();
 					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
-				}
+				 }
 				else
 				{
 					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
@@ -147,15 +162,12 @@ int main(int argc, char **argv)
 		} // end of for
 		posePublisher.publish(markerArray);
 
-
-
-
 		/**
 		 * ros::spinOnce() will pump ONE callback (hence the while).  With this version, all
 		 * callbacks will be called from within this thread (the main one).
 		 */
 		ros::spinOnce();
-		loop_rate.sleep();
+		loop_rate.sleep();	
 
 	}// end of while
 
