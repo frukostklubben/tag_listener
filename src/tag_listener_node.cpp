@@ -131,19 +131,15 @@ int main(int argc, char **argv)
 		{
 			if (tagListener.waitForTransform("/map", transNameArray[looper], ros::Time(0), ros::Duration(0.1)))
 			{
-				try {
-					tagListener.lookupTransform("/map", transNameArray[looper], ros::Time(0), transArray[looper]);
-				}
-				catch (tf::TransformException ex){
-					ROS_ERROR("%s", ex.what());
-					ros::Duration(1.0).sleep();
-				}
+
+				tagListener.lookupTransform("/map", transNameArray[looper], ros::Time(0), transArray[looper]);
 				markerArray.markers.at(looper) = makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1);
-				printf("Publishing");
-				posePublisher.publish(markerArray);
+
+
 			} // end of if
-			printf("Looping");
 		} // end of for
+		printf("Publishing");
+		posePublisher.publish(markerArray);
 
 
 

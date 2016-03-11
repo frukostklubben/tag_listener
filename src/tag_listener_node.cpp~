@@ -129,7 +129,6 @@ int main(int argc, char **argv)
 	{
 		for (int looper = 0 ; looper < 5 ; looper++)
 		{
-			std::cout << looper + "\n";
 			if (tagListener.waitForTransform("/map", transNameArray[looper], ros::Time(0), ros::Duration(0.1)))
 			{
 				try {
@@ -140,9 +139,10 @@ int main(int argc, char **argv)
 					ros::Duration(1.0).sleep();
 				}
 				markerArray.markers.at(looper) = makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1);
-				std::cout << "Publishing";
+				printf("Publishing");
 				posePublisher.publish(markerArray);
 			} // end of if
+			printf("Looping");
 		} // end of for
 
 
