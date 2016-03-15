@@ -57,34 +57,32 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 
 
 // Function that creates the marker.
-visualization_msgs::Marker makeMarker(const tf::StampedTransform tagTransform, std::string name,
-		int id, int red, int green, int blue, int alpha)
+visualization_msgs::MarkerArray makeMarker(const tf::StampedTransform tagTransform, std::string name,
+		int id, int red, int green, int blue, int alpha, int i)
 {
 
-	visualization_msgs::Marker marker;
+	markerArray.markers[i].header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front.
+	markerArray.markers[i].header.stamp = ros::Time();
+	markerArray.markers[i].ns = name;
+	markerArray.markers[i].id = id;
+	markerArray.markers[i].type = visualization_msgs::Marker::CUBE;
+	markerArray.markers[i].action = visualization_msgs::Marker::ADD;
+	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x();
+	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y();
+	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z() - 0.5; // adjusted to put the box where the real world box is.
+	markerArray.markers[i].pose.orientation.x = tagTransform.getRotation().x();
+	markerArray.markers[i].pose.orientation.y = tagTransform.getRotation().y();
+	markerArray.markers[i].pose.orientation.z = tagTransform.getRotation().z();
+	markerArray.markers[i].pose.orientation.w = tagTransform.getRotation().w();
+	markerArray.markers[i].scale.x = 0.5;
+	markerArray.markers[i].scale.y = 0.5;
+	markerArray.markers[i].scale.z = 0.5;
+	markerArray.markers[i].color.r = red;
+	markerArray.markers[i].color.g = green;
+	markerArray.markers[i].color.b = blue;
+	markerArray.markers[i].color.a = alpha; // alpha = opacity
 
-	marker.header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front.
-	marker.header.stamp = ros::Time();
-	marker.ns = name;
-	marker.id = id;
-	marker.type = visualization_msgs::Marker::CUBE;
-	marker.action = visualization_msgs::Marker::ADD;
-	marker.pose.position.x = tagTransform.getOrigin().x();
-	marker.pose.position.y = tagTransform.getOrigin().y();
-	marker.pose.position.z = tagTransform.getOrigin().z() - 0.5; // adjusted to put the box where the real world box is.
-	marker.pose.orientation.x = tagTransform.getRotation().x();
-	marker.pose.orientation.y = tagTransform.getRotation().y();
-	marker.pose.orientation.z = tagTransform.getRotation().z();
-	marker.pose.orientation.w = tagTransform.getRotation().w();
-	marker.scale.x = 0.5;
-	marker.scale.y = 0.5;
-	marker.scale.z = 0.5;
-	marker.color.r = red;
-	marker.color.g = green;
-	marker.color.b = blue;
-	marker.color.a = alpha; // alpha = opacity
-
-	return marker;
+	return markerArray;
 
 }// end of makeMarker();
 
@@ -116,21 +114,12 @@ int main(int argc, char **argv)
 	{
 		for (int looper = 0 ; looper < 5 ; looper++)
 		{
-			// The if test below always returns true, which breaks absolutely everything, needs to be fixed!!!
+
 			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
 			{
 				std::cout << "yolo";
 				break;
 				tagListener.lookupTransform( frame_id, transNameArray[looper], ros::Time(0).now(), transArray[looper]);
-				//if (markerArray.markers.size() == 6)
-				//{
-				//	markerArray.markers.pop_back();
-				//	markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
-				//}
-				//else
-				//{
-					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
-				//}
 
 			} // end of if
 		} // end of for
