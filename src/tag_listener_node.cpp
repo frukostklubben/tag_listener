@@ -57,7 +57,7 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 
 
 // Function that creates the marker.
-visualization_msgs::MarkerArray makeMarker(const tf::StampedTransform tagTransform, std::string name,
+void makeMarkerArray(const tf::StampedTransform tagTransform, std::string name,
 		int id, int red, int green, int blue, int alpha, int i)
 {
 
@@ -81,8 +81,6 @@ visualization_msgs::MarkerArray makeMarker(const tf::StampedTransform tagTransfo
 	markerArray.markers[i].color.g = green;
 	markerArray.markers[i].color.b = blue;
 	markerArray.markers[i].color.a = alpha; // alpha = opacity
-
-	return markerArray;
 
 }// end of makeMarker();
 
@@ -117,11 +115,10 @@ int main(int argc, char **argv)
 
 			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
 			{
-				std::cout << "yolo";
-				break;
 				tagListener.lookupTransform( frame_id, transNameArray[looper], ros::Time(0).now(), transArray[looper]);
-
+				makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,1 ,looper);
 			} // end of if
+
 		} // end of for
 		markerPublisher.publish(markerArray);
 
