@@ -122,15 +122,15 @@ int main(int argc, char **argv)
 				std::cout << "yolo";
 				break;
 				tagListener.lookupTransform( frame_id, transNameArray[looper], ros::Time(0).now(), transArray[looper]);
-				if (markerArray.markers.size() == 6)
-				{
-					markerArray.markers.pop_back();
+				//if (markerArray.markers.size() == 6)
+				//{
+				//	markerArray.markers.pop_back();
+				//	markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
+				//}
+				//else
+				//{
 					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
-				}
-				else
-				{
-					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
-				}
+				//}
 
 			} // end of if
 		} // end of for
