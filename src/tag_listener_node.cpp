@@ -9,7 +9,7 @@
 
 
 // ******************************************
-	//See line 146 (maybe) for POS if test that breaks everything.
+
 //
 
 
@@ -63,7 +63,7 @@ visualization_msgs::Marker makeMarker(const tf::StampedTransform tagTransform, s
 
 	visualization_msgs::Marker marker;
 
-	marker.header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front. 
+	marker.header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front.
 	marker.header.stamp = ros::Time();
 	marker.ns = name;
 	marker.id = id;
@@ -93,57 +93,31 @@ visualization_msgs::Marker makeMarker(const tf::StampedTransform tagTransform, s
 
 int main(int argc, char **argv)
 {
-	/**
-	 * The ros::init() function needs to see argc and argv so that it can perform
-	 * any ROS arguments and name remapping that were provided at the command line.
-	 * For programmatic remappings you can use a different version of init() which takes
-	 * remappings directly, but for most command-line programs, passing argc and argv is
-	 * the easiest way to do it.  The third argument to init() is the name of the node.
-	 *
-	 * You must call one of the versions of ros::init() before using any other
-	 * part of the ROS system.
-	 */
 
+	// init the ros node
 	ros::init(argc, argv,"tag_listener");
 
-
-	/**
-	 * NodeHandle is the main access point to communications with the ROS system.
-	 * The first NodeHandle constructed will fully initialize this node, and the last
-	 * NodeHandle destructed will close down the node.
-	 */
+	// create a bunch of node handles that we need
 	ros::NodeHandle subNodehandle;
 	ros::NodeHandle pubNodehandle;
 	ros::NodeHandle tfHandle;
 
-	/**
-	 * The subscribe() call is how you tell ROS that you want to receive messages
-	 * on a given topic.  This invokes a call to the ROS
-	 * master node, which keeps a registry of who is publishing and who
-	 * is subscribing.  Messages are passed to a callback function, here
-	 * called chatterCallback.  subscribe() returns a Subscriber object that you
-	 * must hold on to until you want to unsubscribe.  When all copies of the Subscriber
-	 * object go out of scope, this callback will automatically be unsubscribed from
-	 * this topic.
-	 *
-	 * The second parameter to the subscribe() function is the size of the message
-	 * queue.  If messages are arriving faster than they are being processed, this
-	 * is the number of messages that will be buffered up before beginning to throw
-	 * away the oldest ones.
-	 */
+	// create a transform that will be a copy of the transform between map and tag
 	tf::TransformListener tagListener;
 
-	ros::Publisher posePublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 1000);
+	// create the publisher of the markerArray
+	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 1000);
 
 	// Set the ros looping rate to 20Hz
 	ros::Rate loop_rate(20);
 
+	// Sort of actual main()
 	while(ros::ok())
 	{
 		for (int looper = 0 ; looper < 5 ; looper++)
 		{
 			// The if test below always returns true, which breaks absolutely everything, needs to be fixed!!!
-			if (tagListener.waitForTransform( frame_id, transNameArray[looper], ros::Time(0), ros::Duration(0.5))); 
+			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
 			{
 				std::cout << "yolo";
 				break;
@@ -152,7 +126,7 @@ int main(int argc, char **argv)
 				{
 					markerArray.markers.pop_back();
 					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
-				 }
+				}
 				else
 				{
 					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
@@ -160,17 +134,18 @@ int main(int argc, char **argv)
 
 			} // end of if
 		} // end of for
-		posePublisher.publish(markerArray);
+		markerPublisher.publish(markerArray);
 
 		/**
 		 * ros::spinOnce() will pump ONE callback (hence the while).  With this version, all
 		 * callbacks will be called from within this thread (the main one).
 		 */
 		ros::spinOnce();
-		loop_rate.sleep();	
+		loop_rate.sleep();
 
-	}// end of while
+	}// end of while / sort of actual main()
 
 	return 0;
+
 } // end of main()
 
