@@ -115,7 +115,8 @@ int main(int argc, char **argv)
 
 			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
 			{
-				tagListener.lookupTransform( frame_id, transNameArray[looper], ros::Time(0).now(), transArray[looper]);
+				tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
+				tagListener.lookupTransform( frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
 				makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,1 ,looper);
 			} // end of if
 
