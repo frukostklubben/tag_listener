@@ -24,6 +24,9 @@
 #include <time.h>
 #include <stdio.h>
 #include "tf/tf.h"
+#include <complex>
+#include <math.h>
+
 
 //****************************************************************************
 
@@ -57,6 +60,26 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 		transform_marker_3, transform_marker_4, transform_marker_5};
 
 
+tf::Vector3 cross(tf::Quaternion const a, tf::Vector3 const b)
+{
+  tf::Vector3 r;
+  r[0] = a[1]*b[2]-a[2]*b[1];
+  r[1] = a[2]*b[0]-a[0]*b[2];
+  r[2] = a[0]*b[1]-a[1]*b[0];
+  return r;
+}
+
+tf::Quaternion conj(tf::Quaternion const &quaternion)
+{
+	tf::Quaternion r;
+	double x = - quaternion.x();
+	double y = - quaternion.y();
+	double z = - quaternion.z();
+	r.setValue(x, y, z);
+	return r;
+}
+
+
 // Function that creates the marker.
 void makeMarkerArray(tf::StampedTransform tagTransform, std::string name,
 	int id, int red,  int green, int blue,  int alpha , int i)
@@ -70,9 +93,20 @@ void makeMarkerArray(tf::StampedTransform tagTransform, std::string name,
 	markerArray.markers[i].id = id;
 	markerArray.markers[i].type = visualization_msgs::Marker::CUBE;
 	markerArray.markers[i].action = visualization_msgs::Marker::ADD;
-	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x() + (0.25 * cos(tagTransform.getRotation().z()));
-	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y() + (0.25 * sin(tagTransform.getRotation().z()));
-	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z();
+	// Create a quaternion matrix to be used to correct center of box
+	tf::Quaternion rotation = tagTransform.getRotation();
+	// Create Unit vector with corrected rotation (0.25, 0, 0) to move box center 0.25m behind tag.
+	tf::Vector3 unitVector;
+	unitVector[0] = 0.25;
+	unitVector[1] = 0;
+	unitVector[2] = 0;
+	unitVector[3] = 0;
+	tf::Quaternion conjRot = conj(rotation);
+	tf::Vector3 newVector = cross(conjRot, cross(rotation, unitVector));
+
+	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x() + newVector.x();
+	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y() + newVector.y();
+	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z() + newVector.z();
 	markerArray.markers[i].pose.orientation.x = tagTransform.getRotation().x();
 	markerArray.markers[i].pose.orientation.y = tagTransform.getRotation().y();
 	markerArray.markers[i].pose.orientation.z = tagTransform.getRotation().z();
@@ -86,6 +120,7 @@ void makeMarkerArray(tf::StampedTransform tagTransform, std::string name,
 	markerArray.markers[i].color.a = alpha; // alpha = opacity
 
 }// end of makeMarkerArray();
+
 
 
 //**********************************************************************************************
@@ -119,11 +154,11 @@ int main(int argc, char **argv)
 				try
 				{
 					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
-				
+
 					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
-				
+
 				}
-				catch (tf::TransformException &ex) 
+				catch (tf::TransformException &ex)
 				{
       				ROS_ERROR("%s",ex.what());
       				ros::Duration(1.0).sleep();
