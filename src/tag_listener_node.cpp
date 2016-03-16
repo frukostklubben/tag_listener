@@ -23,6 +23,7 @@
 #include <vector>
 #include <time.h>
 #include <stdio.h>
+#include "tf/tf.h"
 
 //****************************************************************************
 
@@ -57,19 +58,21 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 
 
 // Function that creates the marker.
-void makeMarkerArray(const tf::StampedTransform tagTransform, std::string name,
-		int id, int red, int green, int blue, int alpha, int i)
+void makeMarkerArray(tf::StampedTransform tagTransform, std::string name,
+	int id, int red,  int green, int blue,  int alpha , int i)
+
 {
 
+	markerArray.markers.resize(6);
 	markerArray.markers[i].header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front.
-	markerArray.markers[i].header.stamp = ros::Time();
+	markerArray.markers[i].header.stamp = ros::Time(0);
 	markerArray.markers[i].ns = name;
 	markerArray.markers[i].id = id;
 	markerArray.markers[i].type = visualization_msgs::Marker::CUBE;
 	markerArray.markers[i].action = visualization_msgs::Marker::ADD;
-	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x();
-	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y();
-	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z() - 0.5; // adjusted to put the box where the real world box is.
+	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x() + (0.25 * cos(tagTransform.getRotation().z()));
+	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y() + (0.25 * sin(tagTransform.getRotation().z()));
+	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z();
 	markerArray.markers[i].pose.orientation.x = tagTransform.getRotation().x();
 	markerArray.markers[i].pose.orientation.y = tagTransform.getRotation().y();
 	markerArray.markers[i].pose.orientation.z = tagTransform.getRotation().z();
@@ -82,7 +85,7 @@ void makeMarkerArray(const tf::StampedTransform tagTransform, std::string name,
 	markerArray.markers[i].color.b = blue;
 	markerArray.markers[i].color.a = alpha; // alpha = opacity
 
-}// end of makeMarker();
+}// end of makeMarkerArray();
 
 
 //**********************************************************************************************
@@ -94,7 +97,6 @@ int main(int argc, char **argv)
 	ros::init(argc, argv,"tag_listener");
 
 	// create a bunch of node handles that we need
-	ros::NodeHandle subNodehandle;
 	ros::NodeHandle pubNodehandle;
 	ros::NodeHandle tfHandle;
 
@@ -102,7 +104,7 @@ int main(int argc, char **argv)
 	tf::TransformListener tagListener;
 
 	// create the publisher of the markerArray
-	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 1000);
+	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 100);
 
 	// Set the ros looping rate to 20Hz
 	ros::Rate loop_rate(20);
@@ -110,23 +112,30 @@ int main(int argc, char **argv)
 	// Sort of actual main()
 	while(ros::ok())
 	{
-		for (int looper = 0 ; looper < 5 ; looper++)
+		for (int looper = 0 ; looper < 6 ; looper++)
 		{
-
 			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
 			{
-				tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
-				tagListener.lookupTransform( frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
-				makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,1 ,looper);
+				try
+				{
+					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
+				
+					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
+				
+				}
+				catch (tf::TransformException &ex) 
+				{
+      				ROS_ERROR("%s",ex.what());
+      				ros::Duration(1.0).sleep();
+      				continue;
+    			}
+    			makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,1 ,looper);
+
 			} // end of if
 
 		} // end of for
 		markerPublisher.publish(markerArray);
 
-		/**
-		 * ros::spinOnce() will pump ONE callback (hence the while).  With this version, all
-		 * callbacks will be called from within this thread (the main one).
-		 */
 		ros::spinOnce();
 		loop_rate.sleep();
 
