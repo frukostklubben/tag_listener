@@ -26,6 +26,9 @@
 #include "tf/tf.h"
 #include <complex>
 #include <math.h>
+#include <cmath>
+
+ #define pi 3.1215;
 
 
 //****************************************************************************
@@ -60,7 +63,7 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 		transform_marker_3, transform_marker_4, transform_marker_5};
 
 
-tf::Vector3 cross(tf::Quaternion const a, tf::Vector3 const b)
+tf::Vector3 cross(tf::Vector3 const a, tf::Vector3 const b)
 {
   tf::Vector3 r;
   r[0] = a[1]*b[2]-a[2]*b[1];
@@ -69,20 +72,22 @@ tf::Vector3 cross(tf::Quaternion const a, tf::Vector3 const b)
   return r;
 }
 
-tf::Quaternion conj(tf::Quaternion const &quaternion)
+tf::Vector3 conj(tf::Vector3 const &quaternion)
 {
-	tf::Quaternion r;
+	tf::Vector3 r;
 	double x = - quaternion.x();
 	double y = - quaternion.y();
 	double z = - quaternion.z();
-	r.setValue(x, y, z);
+	r[0] = x;
+	r[1] = y;
+	r[2] = z;
 	return r;
 }
 
 
 // Function that creates the marker.
 void makeMarkerArray(tf::StampedTransform tagTransform, std::string name,
-	int id, int red,  int green, int blue,  int alpha , int i)
+	int id, int red,  int green, int blue,  double alpha , int i)
 
 {
 
@@ -94,19 +99,13 @@ void makeMarkerArray(tf::StampedTransform tagTransform, std::string name,
 	markerArray.markers[i].type = visualization_msgs::Marker::CUBE;
 	markerArray.markers[i].action = visualization_msgs::Marker::ADD;
 	// Create a quaternion matrix to be used to correct center of box
-	tf::Quaternion rotation = tagTransform.getRotation();
-	// Create Unit vector with corrected rotation (0.25, 0, 0) to move box center 0.25m behind tag.
-	tf::Vector3 unitVector;
-	unitVector[0] = 0.25;
-	unitVector[1] = 0;
-	unitVector[2] = 0;
-	unitVector[3] = 0;
-	tf::Quaternion conjRot = conj(rotation);
-	tf::Vector3 newVector = cross(conjRot, cross(rotation, unitVector));
+	tf::Quaternion quaternion = tagTransform.getRotation();
+	tf::Vector3 vector (0, 0, 0.25);
+	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
 
-	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x() + newVector.x();
-	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y() + newVector.y();
-	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z() + newVector.z();
+	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x() - correctedVector.x();
+	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y() - correctedVector.y();
+	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z() - correctedVector.z();
 	markerArray.markers[i].pose.orientation.x = tagTransform.getRotation().x();
 	markerArray.markers[i].pose.orientation.y = tagTransform.getRotation().y();
 	markerArray.markers[i].pose.orientation.z = tagTransform.getRotation().z();
@@ -139,7 +138,7 @@ int main(int argc, char **argv)
 	tf::TransformListener tagListener;
 
 	// create the publisher of the markerArray
-	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 100);
+	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 10);
 
 	// Set the ros looping rate to 20Hz
 	ros::Rate loop_rate(20);
@@ -164,7 +163,7 @@ int main(int argc, char **argv)
       				ros::Duration(1.0).sleep();
       				continue;
     			}
-    			makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,1 ,looper);
+    			makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
 
 			} // end of if
 
