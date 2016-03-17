@@ -61,10 +61,13 @@ tf::StampedTransform transform_marker_0, transform_marker_1, transform_marker_2,
 tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, transform_marker_2,
 		transform_marker_3, transform_marker_4, transform_marker_5};
 
+// Create an array of ints that keeps track of how many iterations a tag has existed to form a makeshift filter for tag mismatches.
+		int iterationArray[] = {0,0,0,0,0,0};
+
 
 // Function that creates the marker.
-void makeMarkerArray(tf::StampedTransform tagTransform, std::string name,
-	int id, int red,  int green, int blue,  double alpha , int i)
+void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const name,
+	int const id, int const red,  int const green, int const blue,  double const alpha , int const i)
 
 {
 
@@ -125,13 +128,31 @@ int main(int argc, char **argv)
 	ros::Rate loop_rate(20);
 
 
-	markerArray.markers.clear();
 	// Sort of actual main()
 	while(ros::ok())
 	{
+		std::cout << iterationArray[0];
+		std::cout << " ";
+		std::cout << iterationArray[1];
+		std::cout << " ";
+		std::cout << iterationArray[2];
+		std::cout << " ";
+		std::cout << iterationArray[3];
+		std::cout << " ";
+		std::cout << iterationArray[4];
+		std::cout << " ";
+		std::cout << iterationArray[5];
+		std::cout << "\n";
 		for (int looper = 0 ; looper < 6 ; looper++)
 		{
+			
 			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
+			{
+				iterationArray[looper]++;
+			} else if (iterationArray[looper] > 0){
+				iterationArray[looper]--;
+			}
+			if (iterationArray[looper] > 30)
 			{
 				try
 				{
