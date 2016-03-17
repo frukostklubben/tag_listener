@@ -100,9 +100,12 @@ void makeMarkerArray(tf::StampedTransform tagTransform, std::string name,
 	markerArray.markers[i].action = visualization_msgs::Marker::ADD;
 	// Create a quaternion matrix to be used to correct center of box
 	tf::Quaternion quaternion = tagTransform.getRotation();
+	// Create vector 0.25 from tag center.
 	tf::Vector3 vector (0, 0, 0.25);
+	// Rotate the vector by the quaternion to correct it
 	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
 
+	// Add (Subtract) the new corrected vector to the position of the marker to place it at the correct place in space.
 	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x() - correctedVector.x();
 	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y() - correctedVector.y();
 	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z() - correctedVector.z();
