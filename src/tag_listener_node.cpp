@@ -28,7 +28,6 @@
 #include <math.h>
 #include <cmath>
 
- #define pi 3.1215;
 
 
 //****************************************************************************
@@ -63,28 +62,6 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 		transform_marker_3, transform_marker_4, transform_marker_5};
 
 
-tf::Vector3 cross(tf::Vector3 const a, tf::Vector3 const b)
-{
-  tf::Vector3 r;
-  r[0] = a[1]*b[2]-a[2]*b[1];
-  r[1] = a[2]*b[0]-a[0]*b[2];
-  r[2] = a[0]*b[1]-a[1]*b[0];
-  return r;
-}
-
-tf::Vector3 conj(tf::Vector3 const &quaternion)
-{
-	tf::Vector3 r;
-	double x = - quaternion.x();
-	double y = - quaternion.y();
-	double z = - quaternion.z();
-	r[0] = x;
-	r[1] = y;
-	r[2] = z;
-	return r;
-}
-
-
 // Function that creates the marker.
 void makeMarkerArray(tf::StampedTransform tagTransform, std::string name,
 	int id, int red,  int green, int blue,  double alpha , int i)
@@ -109,6 +86,7 @@ void makeMarkerArray(tf::StampedTransform tagTransform, std::string name,
 	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x() - correctedVector.x();
 	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y() - correctedVector.y();
 	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z() - correctedVector.z();
+	// ----------------------------------------------------------------------------------------------------------
 	markerArray.markers[i].pose.orientation.x = tagTransform.getRotation().x();
 	markerArray.markers[i].pose.orientation.y = tagTransform.getRotation().y();
 	markerArray.markers[i].pose.orientation.z = tagTransform.getRotation().z();
@@ -146,6 +124,8 @@ int main(int argc, char **argv)
 	// Set the ros looping rate to 20Hz
 	ros::Rate loop_rate(20);
 
+
+	markerArray.markers.clear();
 	// Sort of actual main()
 	while(ros::ok())
 	{
@@ -167,7 +147,9 @@ int main(int argc, char **argv)
       				continue;
     			}
     			makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
-
+    			for (int k = 0 ; k < 6 ; k++)
+    			{
+    			}
 			} // end of if
 
 		} // end of for
