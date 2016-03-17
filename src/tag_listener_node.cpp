@@ -61,8 +61,7 @@ tf::StampedTransform transform_marker_0, transform_marker_1, transform_marker_2,
 tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, transform_marker_2,
 		transform_marker_3, transform_marker_4, transform_marker_5};
 
-// Create an array of ints that keeps track of how many iterations a tag has existed to form a makeshift filter for tag mismatches.
-		int iterationArray[] = {0,0,0,0,0,0};
+
 
 
 // Function that creates the marker.
