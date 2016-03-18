@@ -123,30 +123,35 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 // Tests if box is in correct place
 bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 {
+	double errorX[6];
+	double errorY[6];
+	double errorZ[6];
+	double lengthOfErrorVec[6];
 	double posXYZ[3];
-	posXYZ[0] = posArray[i][0];
-	posXYZ[1] = posArray[i][1];
-	posXYZ[2] = posArray[i][2];
 
-	std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
+	for ( int k = i; k > 0 ; k--)
+	{
+		posXYZ[0] = posArray[i][0];
+		posXYZ[1] = posArray[i][1];
+		posXYZ[2] = posArray[i][2];
 
-	double errorX;
-	double errorY;
-	double errorZ;
-	double lengthOfErrorVec;
+		std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
 
-	errorX = fabs(transform.getOrigin().x() - posXYZ[0]); // Error in X
-	errorY = fabs(transform.getOrigin().y() - posXYZ[1]); // Error in Y
-	errorZ = fabs(transform.getOrigin().z() - posXYZ[2]); // Error in Z
+		errorX[i] = fabs(transform.getOrigin().x() - posXYZ[0]); // Error in X
+		errorY[i] = fabs(transform.getOrigin().y() - posXYZ[1]); // Error in Y
+		errorZ[i] = fabs(transform.getOrigin().z() - posXYZ[2]); // Error in Z
 
-	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
+		lengthOfErrorVec[i] = sqrt(pow(errorX[i],2)+pow(errorY[i],2)+pow(errorZ[i],2));
 
-	std::cout << lengthOfErrorVec << "\n";
+		std::cout << lengthOfErrorVec << "\n";
 
-	if (lengthOfErrorVec < posHysteresis)
-		return true;
-	else
-		return false;
+		if (lengthOfErrorVec[i] < posHysteresis)
+			return true;
+		else
+			return false;
+
+	}
+
 }// End of boxInCorrectPlace()
 
 //**********************************************************************************************
