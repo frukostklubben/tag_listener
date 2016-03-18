@@ -8,6 +8,12 @@
  */
 
 
+// ******************************************
+
+//
+
+
+
 #include "ros/ros.h"
 #include "visualization_msgs/Marker.h"
 #include "visualization_msgs/MarkerArray.h"
@@ -17,13 +23,32 @@
 #include <vector>
 #include <time.h>
 #include <stdio.h>
+#include "tf/tf.h"
+#include <complex>
+#include <math.h>
+#include <cmath>
 
+
+
+//****************************************************************************
 //****************************************************************************
 
 // Config stuff, muy importante!
 
-std::string frame_id = "/camera_link"; //the frame where you want your marker, the frame in makeMarker needs to be changed manually!
+//the frame where you want your marker, the frame in makeMarker needs to be changed manually!
+std::string frame_id = "/camera_link";
 
+// Positions of tower blocks to be checked against IRL box position (boxes are cubic, 0.5m^3)
+const double posArray[6][3] = {{1,0,0}, // Position of first box
+		{0,0,0}, // Position of second box
+		{0,0,0}, //
+		{0,0,0}, //
+		{0,0,0}, //
+		{0,0,0}};// You got it, position of sixth box.
+// Position error margin for box (in meters on all axes)
+double posHysteresis = 0.1;
+
+//****************************************************************************
 //****************************************************************************
 
 
@@ -42,129 +67,159 @@ std::string markerNameArray[] = {"marker_0", "marker_1", "marker_2",
 // array to be filled with corresponding markers
 visualization_msgs::MarkerArray markerArray;
 
-
 // create all the transforms for all the markers and place them in an array
 tf::StampedTransform transform_marker_0, transform_marker_1, transform_marker_2, transform_marker_3, transform_marker_4, transform_marker_5;
 
 tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, transform_marker_2,
 		transform_marker_3, transform_marker_4, transform_marker_5};
 
+// Keep track of how far into the build we are.
+int buildNumber = 0;
+
+// Keep track of whether box is in correct place or not
+bool markerPlaced[] = {0,0,0,0,0,0};
+
+
 
 // Function that creates the marker.
-visualization_msgs::Marker makeMarker(const tf::StampedTransform tagTransform, std::string name,
-		int id, int red, int green, int blue, int alpha)
+void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const name,
+		int const id, int const red,  int const green, int const blue,  double const alpha , int const i)
 {
 
-	visualization_msgs::Marker marker;
+	markerArray.markers.resize(6);
+	markerArray.markers[i].header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front.
+	markerArray.markers[i].header.stamp = ros::Time(0);
+	markerArray.markers[i].ns = name;
+	markerArray.markers[i].id = id;
+	markerArray.markers[i].type = visualization_msgs::Marker::CUBE;
+	markerArray.markers[i].action = visualization_msgs::Marker::ADD;
+	// Create a quaternion matrix to be used to correct center of box
+	tf::Quaternion quaternion = tagTransform.getRotation();
+	// Create vector 0.25 from tag center.
+	tf::Vector3 vector (0, 0, 0.25);
+	// Rotate the vector by the quaternion to correct it
+	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
 
-	marker.header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front. 
-	marker.header.stamp = ros::Time();
-	marker.ns = name;
-	marker.id = id;
-	marker.type = visualization_msgs::Marker::CUBE;
-	marker.action = visualization_msgs::Marker::ADD;
-	marker.pose.position.x = tagTransform.getOrigin().x();
-	marker.pose.position.y = tagTransform.getOrigin().y();
-	marker.pose.position.z = tagTransform.getOrigin().z() - 0.5; // adjusted to put the box where the real world box is.
-	marker.pose.orientation.x = tagTransform.getRotation().x();
-	marker.pose.orientation.y = tagTransform.getRotation().y();
-	marker.pose.orientation.z = tagTransform.getRotation().z();
-	marker.pose.orientation.w = tagTransform.getRotation().w();
-	marker.scale.x = 0.5;
-	marker.scale.y = 0.5;
-	marker.scale.z = 0.5;
-	marker.color.r = red;
-	marker.color.g = green;
-	marker.color.b = blue;
-	marker.color.a = alpha; // alpha = opacity
+	// Add (Subtract) the new corrected vector to the position of the marker to place it at the correct place in space.
+	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x() - correctedVector.x();
+	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y() - correctedVector.y();
+	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z() - correctedVector.z();
+	// ----------------------------------------------------------------------------------------------------------
+	markerArray.markers[i].pose.orientation.x = tagTransform.getRotation().x();
+	markerArray.markers[i].pose.orientation.y = tagTransform.getRotation().y();
+	markerArray.markers[i].pose.orientation.z = tagTransform.getRotation().z();
+	markerArray.markers[i].pose.orientation.w = tagTransform.getRotation().w();
+	markerArray.markers[i].scale.x = 0.5;
+	markerArray.markers[i].scale.y = 0.5;
+	markerArray.markers[i].scale.z = 0.5;
+	markerArray.markers[i].color.r = red;
+	markerArray.markers[i].color.g = green;
+	markerArray.markers[i].color.b = blue;
+	markerArray.markers[i].color.a = alpha; // alpha = opacity
 
-	return marker;
+}// end of makeMarkerArray();
 
-}// end of makeMarker();
 
+// Tests if box is in correct place
+bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
+{
+	double posXYZ[3];
+	posXYZ[0] = posArray[i][0];
+	posXYZ[1] = posArray[i][1];
+	posXYZ[2] = posArray[i][2];
+
+	std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n"
+
+	double errorX;
+	double errorY;
+	double errorZ;
+	double lengthOfErrorVec;
+
+	errorX = fabs(transform.getOrigin().x() - posXYZ[0]); // Error in X
+	errorY = fabs(transform.getOrigin().y() - posXYZ[1]); // Error in Y
+	errorZ = fabs(transform.getOrigin().z() - posXYZ[2]); // Error in Z
+
+	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
+
+	std::cout << lengthOfErrorVec << "\n";
+
+	if (lengthOfErrorVec < posHysteresis)
+		return true;
+	else
+		return false;
+}// End of boxInCorrectPlace()
 
 //**********************************************************************************************
 
 int main(int argc, char **argv)
 {
-	/**
-	 * The ros::init() function needs to see argc and argv so that it can perform
-	 * any ROS arguments and name remapping that were provided at the command line.
-	 * For programmatic remappings you can use a different version of init() which takes
-	 * remappings directly, but for most command-line programs, passing argc and argv is
-	 * the easiest way to do it.  The third argument to init() is the name of the node.
-	 *
-	 * You must call one of the versions of ros::init() before using any other
-	 * part of the ROS system.
-	 */
 
+	// init the ros node
 	ros::init(argc, argv,"tag_listener");
 
-
-	/**
-	 * NodeHandle is the main access point to communications with the ROS system.
-	 * The first NodeHandle constructed will fully initialize this node, and the last
-	 * NodeHandle destructed will close down the node.
-	 */
-	ros::NodeHandle subNodehandle;
+	// create a bunch of node handles that we need
 	ros::NodeHandle pubNodehandle;
 	ros::NodeHandle tfHandle;
 
-	/**
-	 * The subscribe() call is how you tell ROS that you want to receive messages
-	 * on a given topic.  This invokes a call to the ROS
-	 * master node, which keeps a registry of who is publishing and who
-	 * is subscribing.  Messages are passed to a callback function, here
-	 * called chatterCallback.  subscribe() returns a Subscriber object that you
-	 * must hold on to until you want to unsubscribe.  When all copies of the Subscriber
-	 * object go out of scope, this callback will automatically be unsubscribed from
-	 * this topic.
-	 *
-	 * The second parameter to the subscribe() function is the size of the message
-	 * queue.  If messages are arriving faster than they are being processed, this
-	 * is the number of messages that will be buffered up before beginning to throw
-	 * away the oldest ones.
-	 */
+	// create a transform that will be a copy of the transform between map and tag
 	tf::TransformListener tagListener;
 
-	ros::Publisher posePublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 1000);
+	// create the publisher of the markerArray
+	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 10);
 
 	// Set the ros looping rate to 20Hz
 	ros::Rate loop_rate(20);
 
+
+	// Sort of actual main()
 	while(ros::ok())
 	{
-		for (int looper = 0 ; looper < 5 ; looper++)
+
+		for (int looper = 0 ; looper < 6 ; looper++)
 		{
-			// The if test below always returns true, which breaks absolutely everything, needs to be fixed!!!
-			if (tagListener.waitForTransform( frame_id, transNameArray[looper], ros::Time(0), ros::Duration(0.5))); 
+
+			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
 			{
-				std::cout << "yolo";
-				break;
-				tagListener.lookupTransform( frame_id, transNameArray[looper], ros::Time(0).now(), transArray[looper]);
-				if (markerArray.markers.size() == 6)
+				try
 				{
-					markerArray.markers.pop_back();
-					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
-				 }
-				else
+					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
+
+					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
+
+				}
+				catch (tf::TransformException &ex)
 				{
-					markerArray.markers.push_back(makeMarker(transArray[looper], markerNameArray[looper], 0, 1, 0, 0, 1));
+					ROS_ERROR("%s",ex.what());
+					ros::Duration(1.0).sleep();
+					continue;
+				}
+				if (boxInCorrectPlace(transArray[looper], buildNumber))
+				{
+					makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
+					if (!markerPlaced[looper])
+					{
+						markerPlaced[looper] = true;
+						buildNumber++;
+					}
+
+				} else
+				{
+					makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
+					markerPlaced[looper] = false;
 				}
 
 			} // end of if
+
 		} // end of for
-		posePublisher.publish(markerArray);
 
-		/**
-		 * ros::spinOnce() will pump ONE callback (hence the while).  With this version, all
-		 * callbacks will be called from within this thread (the main one).
-		 */
+		markerPublisher.publish(markerArray);
+
 		ros::spinOnce();
-		loop_rate.sleep();	
+		loop_rate.sleep();
 
-	}// end of while
+	}// end of while / sort of actual main()
 
 	return 0;
+
 } // end of main()
 
