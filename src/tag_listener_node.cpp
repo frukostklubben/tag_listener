@@ -130,28 +130,11 @@ int main(int argc, char **argv)
 	// Sort of actual main()
 	while(ros::ok())
 	{
-		std::cout << iterationArray[0];
-		std::cout << " ";
-		std::cout << iterationArray[1];
-		std::cout << " ";
-		std::cout << iterationArray[2];
-		std::cout << " ";
-		std::cout << iterationArray[3];
-		std::cout << " ";
-		std::cout << iterationArray[4];
-		std::cout << " ";
-		std::cout << iterationArray[5];
-		std::cout << "\n";
+
 		for (int looper = 0 ; looper < 6 ; looper++)
 		{
-			
+
 			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
-			{
-				iterationArray[looper]++;
-			} else if (iterationArray[looper] > 0){
-				iterationArray[looper]--;
-			}
-			if (iterationArray[looper] > 30)
 			{
 				try
 				{
