@@ -31,11 +31,24 @@
 
 
 //****************************************************************************
+//****************************************************************************
 
 // Config stuff, muy importante!
 
-std::string frame_id = "/camera_link"; //the frame where you want your marker, the frame in makeMarker needs to be changed manually!
+//the frame where you want your marker, the frame in makeMarker needs to be changed manually!
+std::string frame_id = "/camera_link";
 
+// Positions of tower blocks to be checked against IRL box position (boxes are cubic, 0.5m^3)
+const double posArray[6][3] = {{1,0,0}, // Position of first box
+		{0,0,0}, // Position of second box
+		{0,0,0}, //
+		{0,0,0}, //
+		{0,0,0}, //
+		{0,0,0}};// You got it, position of sixth box.
+// Position error margin for box (in meters on all axes)
+double posHysteresis = 0.1;
+
+//****************************************************************************
 //****************************************************************************
 
 
@@ -54,20 +67,23 @@ std::string markerNameArray[] = {"marker_0", "marker_1", "marker_2",
 // array to be filled with corresponding markers
 visualization_msgs::MarkerArray markerArray;
 
-
 // create all the transforms for all the markers and place them in an array
 tf::StampedTransform transform_marker_0, transform_marker_1, transform_marker_2, transform_marker_3, transform_marker_4, transform_marker_5;
 
 tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, transform_marker_2,
 		transform_marker_3, transform_marker_4, transform_marker_5};
 
+// Keep track of how far into the build we are.
+int buildNumber = 0;
+
+// Keep track of whether box is in correct place or not
+bool markerPlaced[] = {0,0,0,0,0,0};
 
 
 
 // Function that creates the marker.
 void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const name,
-	int const id, int const red,  int const green, int const blue,  double const alpha , int const i)
-
+		int const id, int const red,  int const green, int const blue,  double const alpha , int const i)
 {
 
 	markerArray.markers.resize(6);
@@ -104,6 +120,30 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 }// end of makeMarkerArray();
 
 
+// Tests if box is in correct place
+bool boxInCorrectPlace(const tf::StampedTransform transform, int i)
+{
+	double posXYZ[3];
+	posXYZ[0] = posArray[i][0];
+	posXYZ[1] = posArray[i][1];
+	posXYZ[2] = posArray[i][2];
+
+	double errorX;
+	double errorY;
+	double errorZ;
+	double lengthOfErrorVec;
+
+	errorX = abs(transform.getOrigin().x() - posXYZ[0]); // Error in X
+	errorY = abs(transform.getOrigin().y() - posXYZ[1]); // Error in Y
+	errorZ = abs(transform.getOrigin().z() - posXYZ[2]); // Error in Z
+
+	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
+
+	if (lengthOfErrorVec < posHysteresis)
+		return true;
+	else
+		return false;
+}// End of boxInCorrectPlace()
 
 //**********************************************************************************************
 
@@ -145,17 +185,29 @@ int main(int argc, char **argv)
 				}
 				catch (tf::TransformException &ex)
 				{
-      				ROS_ERROR("%s",ex.what());
-      				ros::Duration(1.0).sleep();
-      				continue;
-    			}
-    			makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
-    			for (int k = 0 ; k < 6 ; k++)
-    			{
-    			}
+					ROS_ERROR("%s",ex.what());
+					ros::Duration(1.0).sleep();
+					continue;
+				}
+				if (boxInCorrectPlace(transArray[looper], buildNumber))
+				{
+					makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
+					if (!markerPlaced[looper])
+					{
+						markerPlaced[looper] = true;
+						buildNumber++;
+					}
+
+				} else
+				{
+					makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
+					markerPlaced[looper] = false;
+				}
+
 			} // end of if
 
 		} // end of for
+
 		markerPublisher.publish(markerArray);
 
 		ros::spinOnce();
