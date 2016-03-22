@@ -57,6 +57,7 @@
 #include <complex>
 #include <math.h>
 #include <cmath>
+#include <ctime>
 
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Core>
@@ -190,6 +191,7 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 // Makes corners from the face of the tag.
 void fetchCorners(tf::StampedTransform const transform, int i)
 {
+	double time = std::time(0);
 	// Create a quaternion matrix to be used to correct corners of box
 	tf::Quaternion quaternion = transform.getRotation();
 	// Create four vectors pointing at corners of box from tag center (assuming box is 0.5x0.5x0.5m).
@@ -220,6 +222,10 @@ void fetchCorners(tf::StampedTransform const transform, int i)
 	eigenCorners(i,11) = correctedVector3.getZ();
 
 	eigenCorners(i,12) = i;
+
+	double funcTime = std::time(0) - time;
+
+	std::cout << "The fetchCorner method took " << funcTime << "seconds to complete. \n";
 
 }
 
@@ -255,6 +261,7 @@ int main(int argc, char **argv)
 
 			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
 			{
+				std::cout << "Found a transform! \n";
 				try
 				{
 					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
@@ -270,6 +277,7 @@ int main(int argc, char **argv)
 								markerPlaced[looper] = true;
 								buildNumber++;
 							}// end of if
+							std::cout << "Made it to green box markerMaker \n";
 
 						} else // end of if
 						{
@@ -295,6 +303,7 @@ int main(int argc, char **argv)
 		std_msgs::Float64MultiArray stdCorners;
 		tf::matrixEigenToMsg(eigenCorners, stdCorners);
 
+		std::cout << "Below this line I try to publish my stuff, this should be looping at a ridiculous rate... \n";
 		markerPublisher.publish(markerArray);
 		cornerPublisher.publish(stdCorners);
 
