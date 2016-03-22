@@ -109,7 +109,7 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 		transform_marker_3, transform_marker_4, transform_marker_5};
 
 // Keep track of how far into the build we are.
-int buildNumber = 0;
+int buildNumber = 1;
 
 // Keep track of whether box is in correct place or not
 bool markerPlaced[] = {0,0,0,0,0,0};
@@ -191,7 +191,6 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 // Makes corners from the face of the tag.
 void fetchCorners(tf::StampedTransform const transform, int i)
 {
-	double time = std::time(0);
 	// Create a quaternion matrix to be used to correct corners of box
 	tf::Quaternion quaternion = transform.getRotation();
 	// Create four vectors pointing at corners of box from tag center (assuming box is 0.5x0.5x0.5m).
@@ -222,10 +221,6 @@ void fetchCorners(tf::StampedTransform const transform, int i)
 	eigenCorners(i,11) = correctedVector3.getZ();
 
 	eigenCorners(i,12) = i;
-
-	double funcTime = std::time(0) - time;
-
-	std::cout << "The fetchCorner method took " << funcTime << "seconds to complete. \n";
 
 }
 
@@ -269,7 +264,7 @@ int main(int argc, char **argv)
 					fetchCorners(transArray[looper], looper);
 					for (int k = buildNumber ; k > 0 ; k--)
 					{
-						if (boxInCorrectPlace(transArray[looper], buildNumber))
+						if (boxInCorrectPlace(transArray[looper], buildNumber-1))
 						{
 							makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
 							if (!markerPlaced[looper])
@@ -303,7 +298,6 @@ int main(int argc, char **argv)
 		std_msgs::Float64MultiArray stdCorners;
 		tf::matrixEigenToMsg(eigenCorners, stdCorners);
 
-		std::cout << "Below this line I try to publish my stuff, this should be looping at a ridiculous rate... \n";
 		markerPublisher.publish(markerArray);
 		cornerPublisher.publish(stdCorners);
 
