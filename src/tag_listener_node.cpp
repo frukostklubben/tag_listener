@@ -245,7 +245,7 @@ int main(int argc, char **argv)
 	// Set the ros looping rate to 20Hz
 	ros::Rate loop_rate(20);
 
-
+	std::cout << "Publishing markers to /tag_marker_array \n" << "Publishing corners to /corners \n";
 	// Sort of actual main()
 	while(ros::ok())
 	{
@@ -273,7 +273,8 @@ int main(int argc, char **argv)
 
 						} else // end of if
 						{
-							makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
+							std::cout << "Made it to red box markermMaker \n";
+							makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.75 ,looper);
 							markerPlaced[looper] = false;
 						}
 					}// end of for
