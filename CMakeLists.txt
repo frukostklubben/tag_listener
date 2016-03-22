@@ -12,6 +12,12 @@ genmsg
 tf
 )
 
+## Inude Eigen
+find_package(Eigen3 REQUIRED)
+
+## No clue
+find_package(cmake_modules REQUIRED)
+
 
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=gnu++0x")
@@ -120,6 +126,8 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 
+include_directories(${Eigen3_INCLUDE_DIRS})
+
 ## Declare a C++ library
 # add_library(tag_listener
 #   src/${PROJECT_NAME}/tag_listener.cpp
@@ -176,6 +184,8 @@ target_link_libraries(tag_listener_node ${catkin_LIBRARIES})
 #   # myfile2
 #   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 # )
+
+add_definitions(${EIGEN3_DEFINITIONS})
 
 #############
 ## Testing ##

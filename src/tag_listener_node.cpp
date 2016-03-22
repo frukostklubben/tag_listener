@@ -1,23 +1,53 @@
+
 /*
- * tag_listener_node.cpp
- *
- *  Created on: Mar 11, 2016
- *      Author: Fredrik Macintosh
- *
- *      This program listens to the transforms of tags sent by the ar_track_alvin node and places them in the map frame.
+  Software License Agreement (BSD License)
+
+  Copyright (c) 2016, Fredrik Macintosh
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions
+  are met:
+
+ * Redistributions of source code must retain the above copyright
+  notice, this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above
+  copyright notice, this list of conditions and the following
+  disclaimer in the documentation and/or other materials provided
+  with the distribution.
+ * The name of the original author or Chalmers University of Technology may be used to endorse or promote products derived
+  from this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
  */
 
 
-// ******************************************
 
-//
+
+//This program listens to the transforms of tags sent by the modified ar_track_alvin node and places them in the map frame.
+// it also publishes the four front-facing corners of a detected "box" for use with the projection mapping.
+
 
 
 
 #include "ros/ros.h"
 #include "visualization_msgs/Marker.h"
 #include "visualization_msgs/MarkerArray.h"
+#include "std_msgs/Float64MultiArray.h"
+
 #include "tf/transform_listener.h"
+
 #include <iostream>
 #include <stdlib.h>
 #include <vector>
@@ -28,6 +58,9 @@
 #include <math.h>
 #include <cmath>
 
+#include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Core>
+#include <eigen_conversions/eigen_msg.h>
 
 
 //****************************************************************************
@@ -39,14 +72,15 @@
 std::string frame_id = "/camera_link";
 
 // Positions of tower blocks to be checked against IRL box position (boxes are cubic, 0.5m^3)
+//Positions are stored X,Y,Z
 const double posArray[6][3] = {{1,0,0}, // Position of first box
 		{0,0,0}, // Position of second box
 		{0,0,0}, //
 		{0,0,0}, //
 		{0,0,0}, //
 		{0,0,0}};// You got it, position of sixth box.
-// Position error margin for box (in meters on all axes)
-double posHysteresis = 0.1;
+// Position error margin for box (basically radius of error sphere)
+double posHysteresis = 0.05;
 
 //****************************************************************************
 //****************************************************************************
@@ -79,6 +113,8 @@ int buildNumber = 0;
 // Keep track of whether box is in correct place or not
 bool markerPlaced[] = {0,0,0,0,0,0};
 
+// Container of all the front facing corners of all boxes
+Eigen::MatrixXd eigenCorners(6,13);
 
 
 // Function that creates the marker.
@@ -97,7 +133,7 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	tf::Quaternion quaternion = tagTransform.getRotation();
 	// Create vector 0.25 from tag center.
 	tf::Vector3 vector (0, 0, 0.25);
-	// Rotate the vector by the quaternion to correct it
+	// Rotate the vector by the quaternion to make it follow rotation of tag
 	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
 
 	// Add (Subtract) the new corrected vector to the position of the marker to place it at the correct place in space.
@@ -123,36 +159,69 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 // Tests if box is in correct place
 bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 {
-	double errorX[6];
-	double errorY[6];
-	double errorZ[6];
-	double lengthOfErrorVec[6];
 	double posXYZ[3];
+	posXYZ[0] = posArray[i][0];
+	posXYZ[1] = posArray[i][1];
+	posXYZ[2] = posArray[i][2];
 
-	for ( int k = i; k > 0 ; k--)
-	{
-		posXYZ[0] = posArray[i][0];
-		posXYZ[1] = posArray[i][1];
-		posXYZ[2] = posArray[i][2];
+	std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
 
-		std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
+	double errorX;
+	double errorY;
+	double errorZ;
+	double lengthOfErrorVec;
 
-		errorX[i] = fabs(transform.getOrigin().x() - posXYZ[0]); // Error in X
-		errorY[i] = fabs(transform.getOrigin().y() - posXYZ[1]); // Error in Y
-		errorZ[i] = fabs(transform.getOrigin().z() - posXYZ[2]); // Error in Z
+	errorX = fabs(transform.getOrigin().x() - posXYZ[0]); // Error in X
+	errorY = fabs(transform.getOrigin().y() - posXYZ[1]); // Error in Y
+	errorZ = fabs(transform.getOrigin().z() - posXYZ[2]); // Error in Z
 
-		lengthOfErrorVec[i] = sqrt(pow(errorX[i],2)+pow(errorY[i],2)+pow(errorZ[i],2));
+	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
 
-		std::cout << lengthOfErrorVec << "\n";
+	std::cout << lengthOfErrorVec << "\n";
 
-		if (lengthOfErrorVec[i] < posHysteresis)
-			return true;
-		else
-			return false;
-
-	}
+	if (lengthOfErrorVec < posHysteresis)
+		return true;
+	else
+		return false;
 
 }// End of boxInCorrectPlace()
+
+
+// Makes corners from the face of the tag.
+void fetchCorners(tf::StampedTransform const transform, int i)
+{
+	// Create a quaternion matrix to be used to correct corners of box
+	tf::Quaternion quaternion = transform.getRotation();
+	// Create four vectors pointing at corners of box from tag center (assuming box is 0.5x0.5x0.5m).
+	tf::Vector3 corner0 = {-0.25, -0.25, 0};
+	tf::Vector3 corner1 = {-0.25, 0.25, 0};
+	tf::Vector3 corner2 = {0.25, -0.25, 0};
+	tf::Vector3 corner3 = {0.25, 0.25, 0};
+	// Rotate the vectors by the quaternion to make it follow rotation of tag
+	tf::Vector3 correctedVector0 = transform.getOrigin() + tf::quatRotate(quaternion, corner0);
+	tf::Vector3 correctedVector1 = transform.getOrigin() + tf::quatRotate(quaternion, corner1);
+	tf::Vector3 correctedVector2 = transform.getOrigin() + tf::quatRotate(quaternion, corner2);
+	tf::Vector3 correctedVector3 = transform.getOrigin() + tf::quatRotate(quaternion, corner3);
+
+	eigenCorners(i,0) = correctedVector0.getX();
+	eigenCorners(i,1) = correctedVector0.getY();
+	eigenCorners(i,2) = correctedVector0.getZ();
+
+	eigenCorners(i,3) = correctedVector1.getX();
+	eigenCorners(i,4) = correctedVector1.getY();
+	eigenCorners(i,5) = correctedVector1.getZ();
+
+	eigenCorners(i,6) = correctedVector2.getX();
+	eigenCorners(i,7) = correctedVector2.getY();
+	eigenCorners(i,8) = correctedVector2.getZ();
+
+	eigenCorners(i,9) = correctedVector3.getX();
+	eigenCorners(i,10) = correctedVector3.getY();
+	eigenCorners(i,11) = correctedVector3.getZ();
+
+	eigenCorners(i,12) = i;
+
+}
 
 //**********************************************************************************************
 
@@ -164,13 +233,14 @@ int main(int argc, char **argv)
 
 	// create a bunch of node handles that we need
 	ros::NodeHandle pubNodehandle;
-	ros::NodeHandle tfHandle;
+	ros::NodeHandle pubNodeHandle2;
 
 	// create a transform that will be a copy of the transform between map and tag
 	tf::TransformListener tagListener;
 
 	// create the publisher of the markerArray
 	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 10);
+	ros::Publisher cornerPublisher = pubNodeHandle2.advertise<std_msgs::Float64MultiArray>("corners", 10);
 
 	// Set the ros looping rate to 20Hz
 	ros::Rate loop_rate(20);
@@ -188,36 +258,44 @@ int main(int argc, char **argv)
 				try
 				{
 					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
-
 					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
+					fetchCorners(transArray[looper], looper);
+					for (int k = buildNumber ; k > 0 ; k--)
+					{
+						if (boxInCorrectPlace(transArray[looper], buildNumber))
+						{
+							makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
+							if (!markerPlaced[looper])
+							{
+								markerPlaced[looper] = true;
+								buildNumber++;
+							}// end of if
 
-				}
+						} else // end of if
+						{
+							makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
+							markerPlaced[looper] = false;
+						}
+					}// end of for
+
+				}// end of try
 				catch (tf::TransformException &ex)
 				{
 					ROS_ERROR("%s",ex.what());
 					ros::Duration(1.0).sleep();
 					continue;
 				}
-				if (boxInCorrectPlace(transArray[looper], buildNumber))
-				{
-					makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
-					if (!markerPlaced[looper])
-					{
-						markerPlaced[looper] = true;
-						buildNumber++;
-					}
-
-				} else
-				{
-					makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
-					markerPlaced[looper] = false;
-				}
 
 			} // end of if
 
 		} // end of for
 
+		//Convert the Eigen::MatrixXd to a ros message, Float64MultiArray to allow it to be published
+		std_msgs::Float64MultiArray stdCorners;
+		tf::matrixEigenToMsg(eigenCorners, stdCorners);
+
 		markerPublisher.publish(markerArray);
+		cornerPublisher.publish(stdCorners);
 
 		ros::spinOnce();
 		loop_rate.sleep();
