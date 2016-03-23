@@ -264,7 +264,7 @@ int main(int argc, char **argv)
 					fetchCorners(transArray[looper], looper);
 					for (int k = buildNumber ; k > 0 ; k--)
 					{
-						if (boxInCorrectPlace(transArray[looper], buildNumber))
+						if (boxInCorrectPlace(transArray[looper], buildNumber-1))
 						{
 							makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
 							if (!markerPlaced[looper])
