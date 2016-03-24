@@ -267,9 +267,14 @@ int main(int argc, char **argv)
 	ROS_INFO("Publishing markers to /tag_marker_array");
 	ROS_INFO("Publishing corners to /corners");
 	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), "and ar_transform_N");
+
+	// Plays some sound.
+	if (!buffer.loadFromFile("src/tag_listener/sound/node_online.ogg"))
+		return -1; // error
+	sound.setBuffer(buffer);
+	sound.play();
+
 	// Sort of actual main()
-
-
 	while(ros::ok())
 	{
 
