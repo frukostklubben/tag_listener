@@ -58,6 +58,7 @@
 #include <math.h>
 #include <cmath>
 #include <ctime>
+#include <string>
 
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Core>
@@ -84,6 +85,9 @@ const double posArray[6][3] = {{1,0,0}, // Position of first box
 		{0,0,0}};// You got it, position of sixth box.
 // Position error margin for box (basically radius of error sphere)
 double posHysteresis = 0.05;
+
+std::string soundPath = "/home/trykks/catkin_ws/src/tag_listener/sound/";
+
 
 //****************************************************************************
 //****************************************************************************
@@ -269,9 +273,10 @@ int main(int argc, char **argv)
 	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), "and ar_transform_N");
 
 	// Plays some sound.
-	if (!buffer.loadFromFile("src/tag_listener/sound/node_online.ogg"))
+	if (!buffer.loadFromFile(soundPath + "node_online.ogg"))
 		return -1; // error
 	sound.setBuffer(buffer);
+	sound.stop();
 	sound.play();
 
 	// Sort of actual main()
