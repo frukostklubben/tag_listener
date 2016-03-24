@@ -63,6 +63,8 @@
 #include <eigen3/Eigen/Core>
 #include <eigen_conversions/eigen_msg.h>
 
+#include <SFML/Audio.hpp>
+
 
 //****************************************************************************
 //****************************************************************************
@@ -116,6 +118,22 @@ bool markerPlaced[] = {0,0,0,0,0,0};
 
 // Container of all the front facing corners of all boxes
 Eigen::MatrixXd eigenCorners(6,13);
+
+
+//Data types for handling sound.
+sf::SoundBuffer buffer;
+sf::Sound sound;
+
+/*
+Load and play sounds as follows:
+
+	if (!buffer.loadFromFile("src/tag_listener/sound/node_online.ogg"))
+		return -1; // error
+	sound.setBuffer(buffer);
+	sound.play();
+
+*/
+
 
 
 // Function that creates the marker.
@@ -250,6 +268,8 @@ int main(int argc, char **argv)
 	ROS_INFO("Publishing corners to /corners");
 	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), "and ar_transform_N");
 	// Sort of actual main()
+
+
 	while(ros::ok())
 	{
 

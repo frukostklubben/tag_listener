@@ -145,11 +145,12 @@ add_executable(tag_listener_node src/tag_listener_node.cpp)
 ## same as for the library above
 # add_dependencies(tag_listener_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
+
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(tag_listener_node
 #   ${catkin_LIBRARIES}
 # )
-target_link_libraries(tag_listener_node ${catkin_LIBRARIES})
+target_link_libraries(tag_listener_node ${catkin_LIBRARIES} sfml-audio sfml-system)
 #############
 ## Install ##
 #############
