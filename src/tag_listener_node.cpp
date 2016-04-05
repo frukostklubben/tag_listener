@@ -15,7 +15,7 @@
   copyright notice, this list of conditions and the following
   disclaimer in the documentation and/or other materials provided
   with the distribution.
- * The name of the original author or Chalmers University of Technology may be used to endorse or promote products derived
+ * The name of the original author or Chalmers University of Technology may not be used to endorse or promote products derived
   from this software without specific prior written permission.
 
   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -35,8 +35,11 @@
 
 
 
-//This program listens to the transforms of tags sent by the modified ar_track_alvin node and places them in the map frame.
+//This program listens to the transforms of tags sent by the modified ar_track_alvin node and places them in a frame of users choice.
 // it also publishes the four front-facing corners of a detected "box" for use with the projection mapping.
+
+// If someone who reads this actually know C++ and think I should make header files to handle all my functions, you're probably correct.
+// but hey, don't fix what isn't broken.
 
 
 
@@ -59,38 +62,45 @@
 #include <cmath>
 #include <ctime>
 #include <string>
+#include <unistd.h>
 
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Core>
 #include <eigen_conversions/eigen_msg.h>
 
-#include <SFML/Audio.hpp>
-
+//#include <SFML/Audio.hpp>  Borken sound stuff
+//#include <SFML/System.hpp>
 
 //****************************************************************************
-//****************************************************************************
-
 // Config stuff, muy importante!
+//****************************************************************************
 
-//the frame where you want your marker, the frame in makeMarker needs to be changed manually!
+// The frame where you want your marker, the frame in makeMarker needs to be changed manually!
 std::string frame_id = "/camera_link";
 
-// Positions of tower blocks to be checked against IRL box position (boxes are cubic, 0.5m^3)
+// Positions of tower blocks to be checked against IRL box position (boxes are cubic, 0.35m^3 -isch  32x35x32...)
 //Positions are stored X,Y,Z
-const double posArray[6][3] = {{1,0,0}, // Position of first box
-		{0,0,0}, // Position of second box
-		{0,0,0}, //
-		{0,0,0}, //
-		{0,0,0}, //
-		{0,0,0}};// You got it, position of sixth box.
-// Position error margin for box (basically radius of error sphere)
+
+// TODO ROTATION OF THE BOXES HAS TO BE HANDLED!! QUATERNIONS AND SHIT.
+
+
+const double posArray[6][3] = {	{0,		0,		-1},// Position of first box
+		{0,		0.32,	-1}, 						// Position of second box
+		{0,		0.32,	-0.68}, 					//
+		{0,		0,		-0.68}, 					//
+		{0.35,	0,		-1}, 						//
+		{-0.35,	0.32,	-1}};						// You got it, position of sixth box.
+
+// Position error margin for box (radius of error sphere)
 double posHysteresis = 0.05;
 
-std::string soundPath = "/home/trykks/catkin_ws/src/tag_listener/sound/";
+// SOund stuff that doesn't work.
+//std::string soundPath = "/home/trykks/catkin_ws/src/tag_listener/sound/";
 
 
 //****************************************************************************
 //****************************************************************************
+
 
 
 // name of all the transforms received from ar_track_alvar
@@ -123,10 +133,10 @@ bool markerPlaced[] = {0,0,0,0,0,0};
 // Container of all the front facing corners of all boxes
 Eigen::MatrixXd eigenCorners(6,13);
 
-
 //Data types for handling sound.
-sf::SoundBuffer buffer;
-sf::Sound sound;
+//Borken as shit
+//sf::SoundBuffer buffer;
+//sf::Sound sound;
 
 /*
 Load and play sounds as follows:
@@ -136,7 +146,7 @@ Load and play sounds as follows:
 	sound.setBuffer(buffer);
 	sound.play();
 
-*/
+ */
 
 
 
@@ -182,6 +192,8 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 // Tests if box is in correct place
 bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 {
+	// TODO ROTATION OF THE BOXES HAS TO BE HANDLED!! QUATERNIONS AND SHIT.
+
 	double posXYZ[3];
 	posXYZ[0] = posArray[i][0];
 	posXYZ[1] = posArray[i][1];
@@ -194,9 +206,9 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 	double errorZ;
 	double lengthOfErrorVec;
 
-	errorX = fabs(transform.getOrigin().x() - posXYZ[0]); // Error in X
-	errorY = fabs(transform.getOrigin().y() - posXYZ[1]); // Error in Y
-	errorZ = fabs(transform.getOrigin().z() - posXYZ[2]); // Error in Z
+	errorX = transform.getOrigin().x() - posXYZ[0]; // Error in X
+	errorY = transform.getOrigin().y() - posXYZ[1]; // Error in Y
+	errorZ = transform.getOrigin().z() - posXYZ[2]; // Error in Z
 
 	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
 
@@ -248,6 +260,27 @@ void fetchCorners(tf::StampedTransform const transform, int i)
 
 //**********************************************************************************************
 
+// Below is some sound stuff that isn't working
+
+/*int func()
+{
+
+	// Plays some sound.
+	//if (!buffer.loadFromFile(soundPath + "node_online.ogg"))
+	//	return -1; // error
+	//sound.setBuffer(buffer);
+
+	//sound.play();
+
+	for (int i = 0; i < 10; ++i)
+        std::cout << "I'm thread number one" << std::endl;
+
+
+
+}
+
+ */
+
 int main(int argc, char **argv)
 {
 
@@ -272,13 +305,18 @@ int main(int argc, char **argv)
 	ROS_INFO("Publishing corners to /corners");
 	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), "and ar_transform_N");
 
-	// Plays some sound.
-	if (!buffer.loadFromFile(soundPath + "node_online.ogg"))
-		return -1; // error
-	sound.setBuffer(buffer);
-	sound.stop();
-	sound.play();
 
+	// Below is more stuff related to the sound stuff
+
+	/*	// create a thread with func() as entry point
+    sf::Thread thread(&func);
+
+    // run it
+    thread.launch();
+
+for (int i = 0; i < 10; ++i)
+        std::cout << "I'm thread main" << std::endl;
+	 */
 	// Sort of actual main()
 	while(ros::ok())
 	{
@@ -341,4 +379,5 @@ int main(int argc, char **argv)
 	return 0;
 
 } // end of main()
+
 
