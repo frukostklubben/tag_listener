@@ -68,6 +68,8 @@
 #include <eigen3/Eigen/Core>
 #include <eigen_conversions/eigen_msg.h>
 
+double pi = 3.1415;
+
 //#include <SFML/Audio.hpp>  Borken sound stuff
 //#include <SFML/System.hpp>
 
@@ -75,26 +77,41 @@
 // Config stuff, muy importante!
 //****************************************************************************
 
-// The frame where you want your marker, the frame in makeMarker needs to be changed manually!
+// The frame where you want your marker, the frame in makeMarkerArray needs to be changed manually!
 std::string frame_id = "/camera_link";
 
+
 // Positions of tower blocks to be checked against IRL box position (boxes are cubic, 0.35m^3 -isch  32x35x32...)
-//Positions are stored X,Y,Z
-
-// TODO ROTATION OF THE BOXES HAS TO BE HANDLED!! QUATERNIONS AND SHIT.
+//Positions are stored X,Y,Z followed by rotation X, Y, Z, W.
 
 
-const double posArray[6][3] = {	{0,		0,		-1},// Position of first box
-		{0,		0.32,	-1}, 						// Position of second box
-		{0,		0.32,	-0.68}, 					//
-		{0,		0,		-0.68}, 					//
-		{0.35,	0,		-1}, 						//
-		{-0.35,	0.32,	-1}};						// You got it, position of sixth box.
+//This array is fugly because I need it to be 4 long for the quaternions
+const double posArray[12][4] = {{0,		0,		-1,		0},// Position of first box
+		{0,		0.32,	-1,		0}, 						// Position of second box
+		{0,		0.32,	-0.68,	0}, 					//
+		{0,		0,		-0.68,	0}, 					//
+		{0.35,	0,		-1,		0}, 						//
+		{-0.35,	0.32,	-1,		0},						// You got it, position of sixth box.
 
-// Position error margin for box (radius of error sphere)
+		//Next entries are rotations represented by quaternions, for your own sake, keep x/y/z = 0 and w = 1.
+		// Read up on quaternions if you want to be a cool kid and have them something other than zero.
+
+		{0,	0,	0,	1},								//Rotation, in quaternion, of first box
+		{0,	0,	0,	1},								//Rotation, in quaternion, of second box
+		{0,	0,	0,	1},								//
+		{0,	0,	0,	1},								//
+		{0,	0,	0,	1},								//
+		{0,	0,	0,	1}};							//
+
+
+
+// Position error margin for box (radius of error sphere) in meters.
 double posHysteresis = 0.05;
 
-// SOund stuff that doesn't work.
+//Rotation error margin for box for handling only ONE axis, use: sin(ANGLE_IN_RADIANS/2). For more than 1 axis, you'll have to read about quaternions.
+double rotHysteresis = sin((5*pi)/360);
+
+// Sound stuff that doesn't work.
 //std::string soundPath = "/home/trykks/catkin_ws/src/tag_listener/sound/";
 
 
@@ -127,7 +144,7 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 // Keep track of how far into the build we are.
 int buildNumber = 1;
 
-// Keep track of whether box is in correct place or not
+// Keep track of whether box is placed correct or not
 bool markerPlaced[] = {0,0,0,0,0,0};
 
 // Container of all the front facing corners of all boxes
@@ -194,27 +211,45 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 {
 	// TODO ROTATION OF THE BOXES HAS TO BE HANDLED!! QUATERNIONS AND SHIT.
 
-	double posXYZ[3];
-	posXYZ[0] = posArray[i][0];
-	posXYZ[1] = posArray[i][1];
-	posXYZ[2] = posArray[i][2];
+	double posXYZ[7];
+	posXYZ[0] = posArray[i][0]; //Positions
+	posXYZ[1] = posArray[i][1]; //
+	posXYZ[2] = posArray[i][2]; //
+	posXYZ[3] = posArray[i][3]; //Rotations (quaternions)
+	posXYZ[4] = posArray[i][4]; //
+	posXYZ[5] = posArray[i][5]; //
+	posXYZ[6] = posArray[i][6]; //
 
 	std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
 
 	double errorX;
 	double errorY;
 	double errorZ;
+	double errorRotX;
+	double errorRotY;
+	double errorRotZ;
+	double errorRotW;
 	double lengthOfErrorVec;
+	double lengthOfErrorRotVec;
 
 	errorX = transform.getOrigin().x() - posXYZ[0]; // Error in X
 	errorY = transform.getOrigin().y() - posXYZ[1]; // Error in Y
 	errorZ = transform.getOrigin().z() - posXYZ[2]; // Error in Z
 
+
 	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
 
-	std::cout << lengthOfErrorVec << "\n";
+	//errorRotX = transform.getRotation().x() - posXYZ[3];
+	//errorRotY = transform.getRotation().y() - posXYZ[4];
+	errorRotZ = fabs(transform.getRotation().z() - posXYZ[5]);  // only interested in rotation around the Z-axis, but added full support for the other
+	// in case you feel like messing around.
+	//errorRotW = transform.getRotation().w() - posXYZ[6];
 
-	if (lengthOfErrorVec < posHysteresis)
+
+	std::cout << lengthOfErrorVec << "\n";
+	// Should handle all sides of a box now.. SHOULD
+	if ((lengthOfErrorVec < posHysteresis) and ((errorRotZ < rotHysteresis) or
+			(errorRotZ < rotHysteresis + 90) or (errorRotZ < rotHysteresis + 180) or (errorRotZ < rotHysteresis + 270)))
 		return true;
 	else
 		return false;

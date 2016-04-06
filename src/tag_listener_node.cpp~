@@ -38,6 +38,9 @@
 //This program listens to the transforms of tags sent by the modified ar_track_alvin node and places them in a frame of users choice.
 // it also publishes the four front-facing corners of a detected "box" for use with the projection mapping.
 
+// If someone who reads this actually know C++ and think I should make header files to handle all my functions, you're probably correct.
+// but hey, don't fix what isn't broken.
+
 
 
 
@@ -130,7 +133,8 @@ bool markerPlaced[] = {0,0,0,0,0,0};
 // Container of all the front facing corners of all boxes
 Eigen::MatrixXd eigenCorners(6,13);
 
-//Data types for handling sound.not implemented
+//Data types for handling sound.
+//Borken as shit
 //sf::SoundBuffer buffer;
 //sf::Sound sound;
 
@@ -202,9 +206,9 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 	double errorZ;
 	double lengthOfErrorVec;
 
-	errorX = fabs(transform.getOrigin().x() - posXYZ[0]); // Error in X
-	errorY = fabs(transform.getOrigin().y() - posXYZ[1]); // Error in Y
-	errorZ = fabs(transform.getOrigin().z() - posXYZ[2]); // Error in Z
+	errorX = transform.getOrigin().x() - posXYZ[0]; // Error in X
+	errorY = transform.getOrigin().y() - posXYZ[1]; // Error in Y
+	errorZ = transform.getOrigin().z() - posXYZ[2]; // Error in Z
 
 	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
 
@@ -375,6 +379,5 @@ for (int i = 0; i < 10; ++i)
 	return 0;
 
 } // end of main()
-
 
 
