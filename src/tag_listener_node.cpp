@@ -258,38 +258,39 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 
 
 // Makes corners from the face of the tag.
-void fetchCorners(tf::StampedTransform const transform, int i)
+void fetchCorners()//tf::StampedTransform const transform, int i)
 {
 	// Create a quaternion matrix to be used to correct corners of box
-	tf::Quaternion quaternion = transform.getRotation();
+	//tf::Quaternion quaternion = transform.getRotation();
 	// Create four vectors pointing at corners of box from tag center (assuming box is 0.5x0.5x0.5m).
 	tf::Vector3 corner0 = {-0.25, -0.25, 0};
 	tf::Vector3 corner1 = {-0.25, 0.25, 0};
 	tf::Vector3 corner2 = {0.25, -0.25, 0};
 	tf::Vector3 corner3 = {0.25, 0.25, 0};
 	// Rotate the vectors by the quaternion to make it follow rotation of tag
-	tf::Vector3 correctedVector0 = transform.getOrigin() + tf::quatRotate(quaternion, corner0);
-	tf::Vector3 correctedVector1 = transform.getOrigin() + tf::quatRotate(quaternion, corner1);
-	tf::Vector3 correctedVector2 = transform.getOrigin() + tf::quatRotate(quaternion, corner2);
-	tf::Vector3 correctedVector3 = transform.getOrigin() + tf::quatRotate(quaternion, corner3);
+	//tf::Vector3 correctedVector0 = transform.getOrigin() + tf::quatRotate(quaternion, corner0);
+	//tf::Vector3 correctedVector1 = transform.getOrigin() + tf::quatRotate(quaternion, corner1);
+	//tf::Vector3 correctedVector2 = transform.getOrigin() + tf::quatRotate(quaternion, corner2);
+	//tf::Vector3 correctedVector3 = transform.getOrigin() + tf::quatRotate(quaternion, corner3);
 
-	eigenCorners(i,0) = correctedVector0.getX();
-	eigenCorners(i,1) = correctedVector0.getY();
-	eigenCorners(i,2) = correctedVector0.getZ();
+	int i = 0;
+	eigenCorners(i,0) = 0;//correctedVector0.getX();
+	eigenCorners(i,1) = 0;//correctedVector0.getY();
+	eigenCorners(i,2) = 0;//correctedVector0.getZ();
 
-	eigenCorners(i,3) = correctedVector1.getX();
-	eigenCorners(i,4) = correctedVector1.getY();
-	eigenCorners(i,5) = correctedVector1.getZ();
+	eigenCorners(i,3) = 1;//correctedVector1.getX();
+	eigenCorners(i,4) = 0;//correctedVector1.getY();
+	eigenCorners(i,5) = 1;//correctedVector1.getZ();
 
-	eigenCorners(i,6) = correctedVector2.getX();
-	eigenCorners(i,7) = correctedVector2.getY();
-	eigenCorners(i,8) = correctedVector2.getZ();
+	eigenCorners(i,6) = 2;//correctedVector2.getX();
+	eigenCorners(i,7) = 0;//correctedVector2.getY();
+	eigenCorners(i,8) = 1;//correctedVector2.getZ();
 
-	eigenCorners(i,9) = correctedVector3.getX();
-	eigenCorners(i,10) = correctedVector3.getY();
-	eigenCorners(i,11) = correctedVector3.getZ();
+	eigenCorners(i,9) = 1;//correctedVector3.getX();
+	eigenCorners(i,10) = 0;//correctedVector3.getY();
+	eigenCorners(i,11) = 2;//correctedVector3.getZ();
 
-	eigenCorners(i,12) = i;
+	eigenCorners(i,12) = 1;//i;
 
 }
 
@@ -366,7 +367,7 @@ for (int i = 0; i < 10; ++i)
 				{
 					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
 					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
-					fetchCorners(transArray[looper], looper);
+					//fetchCorners(transArray[looper], looper);
 					for (int k = buildNumber ; k > 0 ; k--)
 					{
 						if (boxInCorrectPlace(transArray[looper], k-1))
@@ -400,6 +401,7 @@ for (int i = 0; i < 10; ++i)
 		} // end of for
 
 		//Convert the Eigen::MatrixXd to a ros message, Float64MultiArray to allow it to be published
+		fetchCorners();
 		std_msgs::Float64MultiArray stdCorners;
 		tf::matrixEigenToMsg(eigenCorners, stdCorners);
 
