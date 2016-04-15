@@ -134,7 +134,7 @@ std::string markerNameArray[] = {"marker_0", "marker_1", "marker_2",
 
 // array to be filled with corresponding markers
 visualization_msgs::MarkerArray markerArray;
-
+markerArray.markers.resize(6);
 // create all the transforms for all the markers and place them in an array
 tf::StampedTransform transform_marker_0, transform_marker_1, transform_marker_2, transform_marker_3, transform_marker_4, transform_marker_5;
 
@@ -172,7 +172,6 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 		double const id, double const red,  double const green, double const blue,  double const alpha , int const i)
 {
 
-	markerArray.markers.resize(6);
 	markerArray.markers[i].header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front.
 	markerArray.markers[i].header.stamp = ros::Time(0);
 	markerArray.markers[i].ns = name;
@@ -210,6 +209,7 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 {
 	// TODO ROTATION OF THE BOXES HAS TO BE FULLY HANDLED!! QUATERNIONS AND STUFF.
+	
 
 	double posXYZ[7];
 	posXYZ[0] = posArray[i][0]; //Positions
@@ -232,10 +232,16 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 	double lengthOfErrorVec;
 	double lengthOfErrorRotVec;
 
-	errorX = transform.getOrigin().x() - posXYZ[0]; // Error in X
-	errorY = transform.getOrigin().y() - posXYZ[1]; // Error in Y
-	errorZ = transform.getOrigin().z() - posXYZ[2]; // Error in Z
+	// Create a quaternion matrix to be used to correct center of box
+	tf::Quaternion quaternion = tagTransform.getRotation();
+	// Create vector 0.165 from tag center (boxes are 33cm^3 isch).
+	tf::Vector3 vector (0, 0, 0.165);
+	// Rotate the vector by the quaternion to make it follow rotation of tag
+	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
 
+	errorX = (transform.getOrigin().x() - correctedVector.x()) - posXYZ[0]; // Error in X (Corrected to center, same as in makeMarkerArray)
+	errorY = (transform.getOrigin().y() - correctedVector.y()) - posXYZ[1]; // Error in Y (Corrected to center, same as in makeMarkerArray)
+	errorZ = (transform.getOrigin().z() - correctedVector.z()) - posXYZ[2]; // Error in Z (Corrected to center, same as in makeMarkerArray)
 
 	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
 
@@ -263,7 +269,7 @@ void fetchCorners(tf::StampedTransform const transform, int i)
 	// Create a quaternion matrix to be used to correct corners of box
 	tf::Quaternion quaternion = transform.getRotation();
 	// Create four vectors pointing at corners of box from tag center (assuming box is ~0.34x0.34x0.34m).
-	tf::Vector3 corner0 = {-0.23, -0.23, 0};
+	tf::Vector3 corner0 = {-0.23, -0.23, 0}; // sides are 0.34m, distance from center to corner is ~0.23m
 	tf::Vector3 corner1 = {-0.23, 0.23, 0};
 	tf::Vector3 corner2 = {0.23, -0.23, 0};
 	tf::Vector3 corner3 = {0.23, 0.23, 0};
