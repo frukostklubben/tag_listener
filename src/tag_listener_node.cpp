@@ -186,9 +186,9 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
 
 	// Add (Subtract) the new corrected vector to the position of the marker to place it at the correct place in space.
-	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x();// - correctedVector.x();
-	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y();// - correctedVector.y();
-	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z();// - correctedVector.z();
+	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x() - correctedVector.x();
+	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y() - correctedVector.y();
+	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z() - correctedVector.z();
 	// ----------------------------------------------------------------------------------------------------------
 	markerArray.markers[i].pose.orientation.x = tagTransform.getRotation().x();
 	markerArray.markers[i].pose.orientation.y = tagTransform.getRotation().y();
