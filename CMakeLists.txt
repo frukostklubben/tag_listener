@@ -112,8 +112,8 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=gnu++0x")
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES tag_listener
+#	INCLUDE_DIRS include
+#	LIBRARIES tag_listener
 #  CATKIN_DEPENDS other_catkin_pkg
 #  DEPENDS system_lib
 )
@@ -126,7 +126,7 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 
-include_directories(${Eigen3_INCLUDE_DIRS})
+include_directories(${Eigen3_INCLUDE_DIRS} )
 
 ## Declare a C++ library
 # add_library(tag_listener
@@ -140,16 +140,18 @@ include_directories(${Eigen3_INCLUDE_DIRS})
 
 ## Declare a C++ executable
 # add_executable(tag_listener_node src/tag_listener_node.cpp)
-add_executable(tag_listener_node src/tag_listener_node.cpp)
+add_executable(tag_listener_node src/tag_listener_node.cpp )
+
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 # add_dependencies(tag_listener_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(tag_listener_node
 #   ${catkin_LIBRARIES}
 # )
-target_link_libraries(tag_listener_node ${catkin_LIBRARIES})
+target_link_libraries(tag_listener_node ${catkin_LIBRARIES} sfml-audio sfml-system)
 #############
 ## Install ##
 #############
