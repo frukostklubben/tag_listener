@@ -77,7 +77,7 @@ double pi = 3.1415;
 // Config stuff, muy importante!
 //****************************************************************************
 
-// The frame where you want your marker, the frame in makeMarkerArray needs to be changed manually!
+// The frame where you want your marker.
 std::string frame_id = "/camera_link";
 
 
@@ -134,7 +134,7 @@ std::string markerNameArray[] = {"marker_0", "marker_1", "marker_2",
 
 // array to be filled with corresponding markers
 visualization_msgs::MarkerArray markerArray;
-markerArray.markers.resize(6);
+
 // create all the transforms for all the markers and place them in an array
 tf::StampedTransform transform_marker_0, transform_marker_1, transform_marker_2, transform_marker_3, transform_marker_4, transform_marker_5;
 
@@ -171,8 +171,8 @@ Load and play sounds as follows:
 void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const name,
 		double const id, double const red,  double const green, double const blue,  double const alpha , int const i)
 {
-
-	markerArray.markers[i].header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front.
+	markerArray.markers.resize(6);
+	markerArray.markers[i].header.frame_id = frame_id;
 	markerArray.markers[i].header.stamp = ros::Time(0);
 	markerArray.markers[i].ns = name;
 	markerArray.markers[i].id = id;
@@ -186,9 +186,9 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
 
 	// Add (Subtract) the new corrected vector to the position of the marker to place it at the correct place in space.
-	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x() - correctedVector.x();
-	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y() - correctedVector.y();
-	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z() - correctedVector.z();
+	markerArray.markers[i].pose.position.x = tagTransform.getOrigin().x();// - correctedVector.x();
+	markerArray.markers[i].pose.position.y = tagTransform.getOrigin().y();// - correctedVector.y();
+	markerArray.markers[i].pose.position.z = tagTransform.getOrigin().z();// - correctedVector.z();
 	// ----------------------------------------------------------------------------------------------------------
 	markerArray.markers[i].pose.orientation.x = tagTransform.getRotation().x();
 	markerArray.markers[i].pose.orientation.y = tagTransform.getRotation().y();
@@ -206,7 +206,7 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 
 
 // Tests if box is in correct place
-bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
+bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 {
 	// TODO ROTATION OF THE BOXES HAS TO BE FULLY HANDLED!! QUATERNIONS AND STUFF.
 	
@@ -225,15 +225,15 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
 	double errorX;
 	double errorY;
 	double errorZ;
-	double errorRotX;
-	double errorRotY;
+	//double errorRotX;
+	//double errorRotY;
 	double errorRotZ;
-	double errorRotW;
+	//double errorRotW;
 	double lengthOfErrorVec;
-	double lengthOfErrorRotVec;
+	//double lengthOfErrorRotVec;
 
 	// Create a quaternion matrix to be used to correct center of box
-	tf::Quaternion quaternion = tagTransform.getRotation();
+	tf::Quaternion quaternion = transform.getRotation();
 	// Create vector 0.165 from tag center (boxes are 33cm^3 isch).
 	tf::Vector3 vector (0, 0, 0.165);
 	// Rotate the vector by the quaternion to make it follow rotation of tag
@@ -336,7 +336,7 @@ int main(int argc, char **argv)
 	tf::TransformListener tagListener;
 
 	// create the publisher of the markerArray
-	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 10);
+	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 100);
 	ros::Publisher cornerPublisher = pubNodeHandle2.advertise<std_msgs::Float64MultiArray>("corners", 10);
 
 	// Set the ros looping rate to 20Hz
@@ -344,7 +344,7 @@ int main(int argc, char **argv)
 
 	ROS_INFO("Publishing markers to /tag_marker_array");
 	ROS_INFO("Publishing corners to /corners");
-	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), "and ar_transform_N");
+	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), " and ar_transform_N");
 
 
 	// Below is more stuff related to the sound stuff
@@ -365,7 +365,7 @@ for (int i = 0; i < 10; ++i)
 		for (int looper = 0 ; looper < 6 ; looper++)
 		{
 
-			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
+			if (tagListener.canTransform(frame_id, transNameArray[looper], ros::Time(0)))
 			{
 				std::cout << "Found a transform! \n";
 				try // This try is pretty large, but hey, it works...
