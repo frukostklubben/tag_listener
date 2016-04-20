@@ -80,7 +80,6 @@ double pi = 3.1415;
 // The frame where you want your marker.
 std::string frame_id = "/camera_link";
 
-
 // Positions of tower blocks to be checked against IRL box position (boxes are cubic, 0.35m^3 -isch  32x35x32...)
 //Positions are stored X,Y,Z followed by rotation X, Y, Z, W.
 
@@ -118,8 +117,6 @@ double rotHysteresis = sin((5*pi)/360);
 //****************************************************************************
 //****************************************************************************
 
-
-
 // name of all the transforms received from ar_track_alvar
 std::string transNameArray[] = {"/ar_transform_0", "/ar_transform_1", "/ar_transform_2", "/ar_transform_3",
 		"/ar_transform_4", "/ar_transform_5"};
@@ -150,21 +147,80 @@ bool markerPlaced[] = {0,0,0,0,0,0};
 // Container of all the front facing corners of all boxes
 Eigen::MatrixXd eigenCorners(6,13);
 
-//Data types for handling sound.
-//Borken as shit
-//sf::SoundBuffer buffer;
-//sf::Sound sound;
+//Keep track of number of positions recieved for each tag
+int numberOfDataPoints[6];
+//Handle the actual datapoints
+double sumOfDataPoints[6][7];
+//Store the filters poses of the tags
+geometry_msgs::Pose meanPoseArray[6];
+//Store all datapoints
+double storedDataPoints[6][70];
 
-/*
-Load and play sounds as follows:
+//Sorts the storedDataPoints[id][] ascending values..
+void sortAscending(int id)
+{	
+	for (int k = 0; k < 6 ; k++)
+	{
+		bool swapped = false;
+		double temp;
+		while (!swapped)
+		{
+			for (int i = 0; i < 8; i++)
+			{
+				if (storedDataPoints[id][i+k*10] > storedDataPoints[id][i+(k*10)+1])
+				{
+					temp = storedDataPoints[id][i+k*10];
+					storedDataPoints[id][i+k*10] = storedDataPoints[id][i+(k*10)+1];
+					storedDataPoints[id][i+(k*10)+1] = temp;
+					swapped = true;
+				}
+			}
+		}
+	}
+}
 
-	if (!buffer.loadFromFile("src/tag_listener/sound/node_online.ogg"))
-		return -1; // error
-	sound.setBuffer(buffer);
-	sound.play();
 
- */
+// Creates mean values of 10 positions to get a more stable value
+bool filterPosition(tf::StampedTransform const tagTransform, int const id)
+{
 
+	if (numberOfDataPoints[id] < 10)
+	{
+		storedDataPoints[id][numberOfDataPoints[id]] = tagTransform.getOrigin().x();
+		storedDataPoints[id][numberOfDataPoints[id]+10] = tagTransform.getOrigin().y();
+		storedDataPoints[id][numberOfDataPoints[id]+20] = tagTransform.getOrigin().z();
+		storedDataPoints[id][numberOfDataPoints[id]+30] = tagTransform.getRotation().x();
+		storedDataPoints[id][numberOfDataPoints[id]+40] = tagTransform.getRotation().y();
+		storedDataPoints[id][numberOfDataPoints[id]+50] = tagTransform.getRotation().z();
+		storedDataPoints[id][numberOfDataPoints[id]+60] = tagTransform.getRotation().w();
+
+		return false;
+	} else {
+
+		sortAscending(id);
+		for (int k = 0; k < 7; k++)
+		{
+			for (int j = 2; j < 8; j++)
+			{
+					sumOfDataPoints[id][k] = sumOfDataPoints[id][k] + storedDataPoints[id][j+k*10];
+			}
+			
+			sumOfDataPoints[id][k] = sumOfDataPoints[id][k]/6; 
+		}
+
+		meanPoseArray[id].position.x = sumOfDataPoints[id][0];
+		meanPoseArray[id].position.y = sumOfDataPoints[id][1];
+		meanPoseArray[id].position.z = sumOfDataPoints[id][2];
+		meanPoseArray[id].orientation.x = sumOfDataPoints[id][3];
+		meanPoseArray[id].orientation.y = sumOfDataPoints[id][4];
+		meanPoseArray[id].orientation.z = sumOfDataPoints[id][5];
+		meanPoseArray[id].orientation.w = sumOfDataPoints[id][6];
+		numberOfDataPoints[id] = 0;
+
+		return true;
+	}
+	
+}
 
 
 // Function that creates the marker.
@@ -301,27 +357,6 @@ void fetchCorners(tf::StampedTransform const transform, int i)
 
 //**********************************************************************************************
 
-// Below is some sound stuff that isn't working
-
-/*int func()
-{
-
-	// Plays some sound.
-	//if (!buffer.loadFromFile(soundPath + "node_online.ogg"))
-	//	return -1; // error
-	//sound.setBuffer(buffer);
-
-	//sound.play();
-
-	for (int i = 0; i < 10; ++i)
-        std::cout << "I'm thread number one" << std::endl;
-
-
-
-}
-
- */
-
 int main(int argc, char **argv)
 {
 
@@ -346,18 +381,6 @@ int main(int argc, char **argv)
 	ROS_INFO("Publishing corners to /corners");
 	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), " and ar_transform_N");
 
-
-	// Below is more stuff related to the sound stuff
-
-	/*	// create a thread with func() as entry point
-    sf::Thread thread(&func);
-
-    // run it
-    thread.launch();
-
-for (int i = 0; i < 10; ++i)
-        std::cout << "I'm thread main" << std::endl;
-	 */
 	// Sort of actual main()
 	while(ros::ok())
 	{
@@ -372,27 +395,30 @@ for (int i = 0; i < 10; ++i)
 				{
 					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
 					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
-					fetchCorners(transArray[looper], looper);
-					for (int k = buildNumber ; k > 0 ; k--)
+					// Fetch and filter position data here!! Somehow.. change all the transArray[looper] for Pose stuff after filterPosition
+					if (filterPosition(transArray[looper], looper))
 					{
-						if (boxInCorrectPlace(transArray[looper], k-1))
+						fetchCorners(transArray[looper], looper);
+						for (int k = buildNumber ; k > 0 ; k--)
 						{
-							makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
-							if (!markerPlaced[looper])
+							if (boxInCorrectPlace(transArray[looper], k-1))
 							{
-								markerPlaced[looper] = true;
-								buildNumber++;
-							}// end of if
-							std::cout << "Made it to green box markerMaker \n";
+								makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
+								if (!markerPlaced[looper])
+								{
+									markerPlaced[looper] = true;
+									buildNumber++;
+								}// end of if
+								std::cout << "Made it to green box markerMaker \n";
 
-						} else // end of if
-						{
-							std::cout << "Made it to red box markerMaker \n";
-							makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
-							markerPlaced[looper] = false;
-						}
-					}// end of for
-
+							} else // end of if
+							{
+								std::cout << "Made it to red box markerMaker \n";
+								makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
+								markerPlaced[looper] = false;
+							}
+						}// end of for
+					}	
 				}// end of try
 				catch (tf::TransformException &ex)
 				{
