@@ -154,25 +154,29 @@ double sumOfDataPoints[6][7];
 //Store the filters poses of the tags
 geometry_msgs::Pose meanPoseArray[6];
 //Store all datapoints
-double storedDataPoints[6][70];
+double storedDataPoints[6][35];
 
 //Sorts the storedDataPoints[id][] ascending values..
 void sortAscending(int id)
 {	
 	for (int k = 0; k < 6 ; k++)
 	{
-		bool swapped = false;
+		//std::cout << "k in bubble sort = " << k << std::endl;
+		bool swapped = true;
 		double temp;
-		while (!swapped)
+		while (swapped)
 		{
-			for (int i = 0; i < 8; i++)
+			swapped = false;
+			for (int i = 0; i < 4; i++)
 			{
-				if (storedDataPoints[id][i+k*10] > storedDataPoints[id][i+(k*10)+1])
+				//std::cout << "i in bubble sort = " << i << std::endl;
+				if (storedDataPoints[id][i+(k*5)] > storedDataPoints[id][i+(k*5)+1])
 				{
-					temp = storedDataPoints[id][i+k*10];
-					storedDataPoints[id][i+k*10] = storedDataPoints[id][i+(k*10)+1];
-					storedDataPoints[id][i+(k*10)+1] = temp;
+					temp = storedDataPoints[id][i+(k*5)];
+					storedDataPoints[id][i+(k*5)] = storedDataPoints[id][i+(k*5)+1];
+					storedDataPoints[id][i+(k*5)+1] = temp;
 					swapped = true;
+					
 				}
 			}
 		}
@@ -180,27 +184,32 @@ void sortAscending(int id)
 }
 
 
-// Creates mean values of 10 positions to get a more stable value
+// Creates mean values of 5 positions to get a more stable value
 bool filterPosition(tf::StampedTransform const tagTransform, int const id)
 {
-
-	if (numberOfDataPoints[id] < 10)
+	
+	if (numberOfDataPoints[id] < 5)
 	{
 		storedDataPoints[id][numberOfDataPoints[id]] = tagTransform.getOrigin().x();
-		storedDataPoints[id][numberOfDataPoints[id]+10] = tagTransform.getOrigin().y();
-		storedDataPoints[id][numberOfDataPoints[id]+20] = tagTransform.getOrigin().z();
-		storedDataPoints[id][numberOfDataPoints[id]+30] = tagTransform.getRotation().x();
-		storedDataPoints[id][numberOfDataPoints[id]+40] = tagTransform.getRotation().y();
-		storedDataPoints[id][numberOfDataPoints[id]+50] = tagTransform.getRotation().z();
-		storedDataPoints[id][numberOfDataPoints[id]+60] = tagTransform.getRotation().w();
+		storedDataPoints[id][numberOfDataPoints[id]+5] = tagTransform.getOrigin().y();
+		storedDataPoints[id][numberOfDataPoints[id]+10] = tagTransform.getOrigin().z();
+		storedDataPoints[id][numberOfDataPoints[id]+15] = tagTransform.getRotation().x();
+		storedDataPoints[id][numberOfDataPoints[id]+20] = tagTransform.getRotation().y();
+		storedDataPoints[id][numberOfDataPoints[id]+25] = tagTransform.getRotation().z();
+		storedDataPoints[id][numberOfDataPoints[id]+30] = tagTransform.getRotation().w();
+		numberOfDataPoints[id]++;
 
 		return false;
 	} else {
-
+		numberOfDataPoints[id] = 0;
+		//std::cout << "Before bubble sort: " << storedDataPoints[id][0] << " " << storedDataPoints[id][1] << " " 
+		//	<< storedDataPoints[id][2] << " " << storedDataPoints[id][3] << " " << storedDataPoints[id][4] << " " << storedDataPoints[id][5] << std::endl;
 		sortAscending(id);
+		//std::cout << "After bubble sort: " << storedDataPoints[id][0] << " " << storedDataPoints[id][1] << " " 
+		//	<< storedDataPoints[id][2] << " " << storedDataPoints[id][3] << " " << storedDataPoints[id][4] << " " << storedDataPoints[id][5] << std::endl;
 		for (int k = 0; k < 7; k++)
 		{
-			for (int j = 2; j < 8; j++)
+			for (int j = 1; j < 4; j++)
 			{
 					sumOfDataPoints[id][k] = sumOfDataPoints[id][k] + storedDataPoints[id][j+k*10];
 			}
@@ -216,6 +225,7 @@ bool filterPosition(tf::StampedTransform const tagTransform, int const id)
 		meanPoseArray[id].orientation.z = sumOfDataPoints[id][5];
 		meanPoseArray[id].orientation.w = sumOfDataPoints[id][6];
 		numberOfDataPoints[id] = 0;
+		std::cout << "Filtered y = " << meanPoseArray[id].position.y << std::endl;
 
 		return true;
 	}
@@ -276,7 +286,7 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 	posXYZ[5] = posArray[i][5]; //
 	posXYZ[6] = posArray[i][6]; //
 
-	std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
+	//std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
 
 	double errorX;
 	double errorY;
@@ -308,7 +318,7 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 	//errorRotW = transform.getRotation().w() - posXYZ[6];
 
 
-	std::cout << lengthOfErrorVec << "\n";
+	//std::cout << lengthOfErrorVec << "\n";
 	// Should handle all sides of a box now.. SHOULD
 	if ((lengthOfErrorVec < posHysteresis) and ((errorRotZ < rotHysteresis) or
 			(errorRotZ < rotHysteresis + 90) or (errorRotZ < rotHysteresis + 180) or (errorRotZ < rotHysteresis + 270)))
@@ -390,7 +400,7 @@ int main(int argc, char **argv)
 
 			if (tagListener.canTransform(frame_id, transNameArray[looper], ros::Time(0)))
 			{
-				std::cout << "Found a transform! \n";
+				//std::cout << "Found a transform! \n";
 				try // This try is pretty large, but hey, it works...
 				{
 					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
@@ -409,11 +419,11 @@ int main(int argc, char **argv)
 									markerPlaced[looper] = true;
 									buildNumber++;
 								}// end of if
-								std::cout << "Made it to green box markerMaker \n";
+								//std::cout << "Made it to green box markerMaker \n";
 
 							} else // end of if
 							{
-								std::cout << "Made it to red box markerMaker \n";
+								//std::cout << "Made it to red box markerMaker \n";
 								makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
 								markerPlaced[looper] = false;
 							}
