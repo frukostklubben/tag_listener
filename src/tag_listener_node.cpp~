@@ -68,6 +68,8 @@
 #include <eigen3/Eigen/Core>
 #include <eigen_conversions/eigen_msg.h>
 
+double pi = 3.1415;
+
 //#include <SFML/Audio.hpp>  Borken sound stuff
 //#include <SFML/System.hpp>
 
@@ -75,33 +77,45 @@
 // Config stuff, muy importante!
 //****************************************************************************
 
-// The frame where you want your marker, the frame in makeMarker needs to be changed manually!
+// The frame where you want your marker.
 std::string frame_id = "/camera_link";
 
 // Positions of tower blocks to be checked against IRL box position (boxes are cubic, 0.35m^3 -isch  32x35x32...)
-//Positions are stored X,Y,Z
-
-// TODO ROTATION OF THE BOXES HAS TO BE HANDLED!! QUATERNIONS AND SHIT.
+//Positions are stored X,Y,Z followed by rotation X, Y, Z, W.
 
 
-const double posArray[6][3] = {	{0,		0,		-1},// Position of first box
-		{0,		0.32,	-1}, 						// Position of second box
-		{0,		0.32,	-0.68}, 					//
-		{0,		0,		-0.68}, 					//
-		{0.35,	0,		-1}, 						//
-		{-0.35,	0.32,	-1}};						// You got it, position of sixth box.
+//This array is fugly because I need it to be 4 long for the quaternions
+const double posArray[12][4] = {{0,		0,		-1,		0},// Position of first box
+		{0,		0.32,	-1,		0}, 						// Position of second box
+		{0,		0.32,	-0.68,	0}, 					//
+		{0,		0,		-0.68,	0}, 					//
+		{0.35,	0,		-1,		0}, 						//
+		{-0.35,	0.32,	-1,		0},						// You got it, position of sixth box.
 
-// Position error margin for box (radius of error sphere)
+		//Next entries are rotations represented by quaternions, for your own sake, keep x/y/z = 0 and w = 1.
+		// Read up on quaternions if you want to be a cool kid and have them something other than zero.
+
+		{0,	0,	0,	1},								//Rotation, in quaternion, of first box
+		{0,	0,	0,	1},								//Rotation, in quaternion, of second box
+		{0,	0,	0,	1},								//
+		{0,	0,	0,	1},								//
+		{0,	0,	0,	1},								//
+		{0,	0,	0,	1}};							//
+
+
+
+// Position error margin for box (radius of error sphere) in meters.
 double posHysteresis = 0.05;
 
-// SOund stuff that doesn't work.
+//Rotation error margin for box for handling only ONE axis, use: sin(ANGLE_IN_RADIANS/2). For more than 1 axis, you'll have to read about quaternions.
+double rotHysteresis = sin((5*pi)/360);
+
+// Sound stuff that doesn't work.
 //std::string soundPath = "/home/trykks/catkin_ws/src/tag_listener/sound/";
 
 
 //****************************************************************************
 //****************************************************************************
-
-
 
 // name of all the transforms received from ar_track_alvar
 std::string transNameArray[] = {"/ar_transform_0", "/ar_transform_1", "/ar_transform_2", "/ar_transform_3",
@@ -127,36 +141,104 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 // Keep track of how far into the build we are.
 int buildNumber = 1;
 
-// Keep track of whether box is in correct place or not
+// Keep track of whether box is placed correct or not
 bool markerPlaced[] = {0,0,0,0,0,0};
 
 // Container of all the front facing corners of all boxes
 Eigen::MatrixXd eigenCorners(6,13);
 
-//Data types for handling sound.
-//Borken as shit
-//sf::SoundBuffer buffer;
-//sf::Sound sound;
+//Keep track of number of positions recieved for each tag
+int numberOfDataPoints[6];
+//Handle the actual datapoints
+double sumOfDataPoints[6][7];
+//Store the filters poses of the tags
+geometry_msgs::Pose meanPoseArray[6];
+//Store all datapoints
+double storedDataPoints[6][35];
 
-/*
-Load and play sounds as follows:
+//Sorts the storedDataPoints[id][] ascending values..
+void sortAscending(int id)
+{	
+	for (int k = 0; k < 6 ; k++)
+	{
+		//std::cout << "k in bubble sort = " << k << std::endl;
+		bool swapped = true;
+		double temp;
+		while (swapped)
+		{
+			swapped = false;
+			for (int i = 0; i < 4; i++)
+			{
+				//std::cout << "i in bubble sort = " << i << std::endl;
+				if (storedDataPoints[id][i+(k*5)] > storedDataPoints[id][i+(k*5)+1])
+				{
+					temp = storedDataPoints[id][i+(k*5)];
+					storedDataPoints[id][i+(k*5)] = storedDataPoints[id][i+(k*5)+1];
+					storedDataPoints[id][i+(k*5)+1] = temp;
+					swapped = true;
+					
+				}
+			}
+		}
+	}
+}
 
-	if (!buffer.loadFromFile("src/tag_listener/sound/node_online.ogg"))
-		return -1; // error
-	sound.setBuffer(buffer);
-	sound.play();
 
- */
+// Creates mean values of 5 positions to get a more stable value
+bool filterPosition(tf::StampedTransform const tagTransform, int const id)
+{
+	
+	if (numberOfDataPoints[id] < 5)
+	{
+		storedDataPoints[id][numberOfDataPoints[id]] = tagTransform.getOrigin().x();
+		storedDataPoints[id][numberOfDataPoints[id]+5] = tagTransform.getOrigin().y();
+		storedDataPoints[id][numberOfDataPoints[id]+10] = tagTransform.getOrigin().z();
+		storedDataPoints[id][numberOfDataPoints[id]+15] = tagTransform.getRotation().x();
+		storedDataPoints[id][numberOfDataPoints[id]+20] = tagTransform.getRotation().y();
+		storedDataPoints[id][numberOfDataPoints[id]+25] = tagTransform.getRotation().z();
+		storedDataPoints[id][numberOfDataPoints[id]+30] = tagTransform.getRotation().w();
+		numberOfDataPoints[id]++;
 
+		return false;
+	} else {
+		numberOfDataPoints[id] = 0;
+		//std::cout << "Before bubble sort: " << storedDataPoints[id][0] << " " << storedDataPoints[id][1] << " " 
+		//	<< storedDataPoints[id][2] << " " << storedDataPoints[id][3] << " " << storedDataPoints[id][4] << " " << storedDataPoints[id][5] << std::endl;
+		sortAscending(id);
+		//std::cout << "After bubble sort: " << storedDataPoints[id][0] << " " << storedDataPoints[id][1] << " " 
+		//	<< storedDataPoints[id][2] << " " << storedDataPoints[id][3] << " " << storedDataPoints[id][4] << " " << storedDataPoints[id][5] << std::endl;
+		for (int k = 0; k < 7; k++)
+		{
+			for (int j = 1; j < 4; j++)
+			{
+					sumOfDataPoints[id][k] = sumOfDataPoints[id][k] + storedDataPoints[id][j+k*10];
+			}
+			
+			sumOfDataPoints[id][k] = sumOfDataPoints[id][k]/6; 
+		}
+
+		meanPoseArray[id].position.x = sumOfDataPoints[id][0];
+		meanPoseArray[id].position.y = sumOfDataPoints[id][1];
+		meanPoseArray[id].position.z = sumOfDataPoints[id][2];
+		meanPoseArray[id].orientation.x = sumOfDataPoints[id][3];
+		meanPoseArray[id].orientation.y = sumOfDataPoints[id][4];
+		meanPoseArray[id].orientation.z = sumOfDataPoints[id][5];
+		meanPoseArray[id].orientation.w = sumOfDataPoints[id][6];
+		numberOfDataPoints[id] = 0;
+		std::cout << "Filtered y = " << meanPoseArray[id].position.y << std::endl;
+
+		return true;
+	}
+	
+}
 
 
 // Function that creates the marker.
 void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const name,
-		int const id, int const red,  int const green, int const blue,  double const alpha , int const i)
+		double const id, double const red,  double const green, double const blue,  double const alpha , int const i)
 {
-
-	markerArray.markers.resize(6);
-	markerArray.markers[i].header.frame_id = "camera_link";  // My frame needs to be changed manually because I don't want a / sign in front.
+	markerArray.markers.resize(10);
+	markerArray.markers[i].header.frame_id = frame_id;
 	markerArray.markers[i].header.stamp = ros::Time(0);
 	markerArray.markers[i].ns = name;
 	markerArray.markers[i].id = id;
@@ -164,8 +246,12 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	markerArray.markers[i].action = visualization_msgs::Marker::ADD;
 	// Create a quaternion matrix to be used to correct center of box
 	tf::Quaternion quaternion = tagTransform.getRotation();
-	// Create vector 0.25 from tag center.
-	tf::Vector3 vector (0, 0, 0.25);
+	// Create vector 0.165 from tag center (boxes are 33cm^3 isch).
+	tf::Vector3 corner0 = {-0.23, -0.23, 0}; // sides are 0.34m, distance from center to corner is ~0.23m
+	tf::Vector3 corner1 = {-0.23, 0.23, 0};
+	tf::Vector3 corner2 = {0.23, -0.23, 0};
+	tf::Vector3 corner3 = {0.23, 0.23, 0};
+	tf::Vector3 vector (0, 0, 0.165);
 	// Rotate the vector by the quaternion to make it follow rotation of tag
 	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
 
@@ -178,43 +264,104 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	markerArray.markers[i].pose.orientation.y = tagTransform.getRotation().y();
 	markerArray.markers[i].pose.orientation.z = tagTransform.getRotation().z();
 	markerArray.markers[i].pose.orientation.w = tagTransform.getRotation().w();
-	markerArray.markers[i].scale.x = 0.5;
-	markerArray.markers[i].scale.y = 0.5;
-	markerArray.markers[i].scale.z = 0.5;
+	markerArray.markers[i].scale.x = 0.34;
+	markerArray.markers[i].scale.y = 0.34;
+	markerArray.markers[i].scale.z = 0.34;
 	markerArray.markers[i].color.r = red;
 	markerArray.markers[i].color.g = green;
 	markerArray.markers[i].color.b = blue;
 	markerArray.markers[i].color.a = alpha; // alpha = opacity
 
+	tf::Vector3 cors[4];
+	cors[0]=corner0;
+	cors[1]=corner1;
+	cors[2]=corner2;
+	cors[3]=corner3;
+
+	for(int k=6;k<10;k++){
+	
+		markerArray.markers[k].scale.x = 0.05;
+		markerArray.markers[k].scale.y = 0.05;
+		markerArray.markers[k].scale.z = 0.05;
+		markerArray.markers[k].color.r = 0;
+		markerArray.markers[k].color.g = 0;
+		markerArray.markers[k].color.b = 1;
+		markerArray.markers[k].color.a = 1; // alpha = opacity
+
+	
+
+	tf::Vector3 correctedVector0 = tf::quatRotate(quaternion, cors[k-6]);
+
+	markerArray.markers[k].header.frame_id = frame_id;
+	markerArray.markers[k].header.stamp = ros::Time(0);
+	markerArray.markers[k].ns = "name";
+	markerArray.markers[k].id = k;
+	markerArray.markers[k].type = visualization_msgs::Marker::CUBE;
+	markerArray.markers[k].action = visualization_msgs::Marker::ADD;
+	markerArray.markers[k].pose.position.x = tagTransform.getOrigin().x() - correctedVector0.x();
+	markerArray.markers[k].pose.position.y = tagTransform.getOrigin().y() - correctedVector0.y();
+	markerArray.markers[k].pose.position.z = tagTransform.getOrigin().z() - correctedVector0.z();
+	markerArray.markers[k].pose.orientation.x = tagTransform.getRotation().x();
+	markerArray.markers[k].pose.orientation.y = tagTransform.getRotation().y();
+	markerArray.markers[k].pose.orientation.z = tagTransform.getRotation().z();
+	markerArray.markers[k].pose.orientation.w = tagTransform.getRotation().w();
+	
+	}
+
 }// end of makeMarkerArray();
 
 
 // Tests if box is in correct place
-bool boxInCorrectPlace(tf::StampedTransform const transform, int i)
+bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 {
-	// TODO ROTATION OF THE BOXES HAS TO BE HANDLED!! QUATERNIONS AND SHIT.
+	// TODO ROTATION OF THE BOXES HAS TO BE FULLY HANDLED!! QUATERNIONS AND STUFF.
+	
 
-	double posXYZ[3];
-	posXYZ[0] = posArray[i][0];
-	posXYZ[1] = posArray[i][1];
-	posXYZ[2] = posArray[i][2];
+	double posXYZ[7];
+	posXYZ[0] = posArray[i][0]; //Positions
+	posXYZ[1] = posArray[i][1]; //
+	posXYZ[2] = posArray[i][2]; //
+	posXYZ[3] = posArray[i][3]; //Rotations (quaternions)
+	posXYZ[4] = posArray[i][4]; //
+	posXYZ[5] = posArray[i][5]; //
+	posXYZ[6] = posArray[i][6]; //
 
-	std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
+	//std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
 
 	double errorX;
 	double errorY;
 	double errorZ;
+	//double errorRotX;
+	//double errorRotY;
+	double errorRotZ;
+	//double errorRotW;
 	double lengthOfErrorVec;
+	//double lengthOfErrorRotVec;
 
-	errorX = transform.getOrigin().x() - posXYZ[0]; // Error in X
-	errorY = transform.getOrigin().y() - posXYZ[1]; // Error in Y
-	errorZ = transform.getOrigin().z() - posXYZ[2]; // Error in Z
+	// Create a quaternion matrix to be used to correct center of box
+	tf::Quaternion quaternion = transform.getRotation();
+	// Create vector 0.165 from tag center (boxes are 33cm^3 isch).
+	tf::Vector3 vector (0, 0, 0.165);
+	// Rotate the vector by the quaternion to make it follow rotation of tag
+	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
+
+	errorX = (transform.getOrigin().x() - correctedVector.x()) - posXYZ[0]; // Error in X (Corrected to center, same as in makeMarkerArray)
+	errorY = (transform.getOrigin().y() - correctedVector.y()) - posXYZ[1]; // Error in Y (Corrected to center, same as in makeMarkerArray)
+	errorZ = (transform.getOrigin().z() - correctedVector.z()) - posXYZ[2]; // Error in Z (Corrected to center, same as in makeMarkerArray)
 
 	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
 
-	std::cout << lengthOfErrorVec << "\n";
+	//errorRotX = transform.getRotation().x() - posXYZ[3];
+	//errorRotY = transform.getRotation().y() - posXYZ[4];
+	errorRotZ = fabs(transform.getRotation().z() - posXYZ[5]);  // only interested in rotation around the Z-axis, but added full support for the other
+	// in case you feel like messing around.
+	//errorRotW = transform.getRotation().w() - posXYZ[6];
 
-	if (lengthOfErrorVec < posHysteresis)
+
+	//std::cout << lengthOfErrorVec << "\n";
+	// Should handle all sides of a box now.. SHOULD
+	if ((lengthOfErrorVec < posHysteresis) and ((errorRotZ < rotHysteresis) or
+			(errorRotZ < rotHysteresis + 90) or (errorRotZ < rotHysteresis + 180) or (errorRotZ < rotHysteresis + 270)))
 		return true;
 	else
 		return false;
@@ -227,11 +374,11 @@ void fetchCorners(tf::StampedTransform const transform, int i)
 {
 	// Create a quaternion matrix to be used to correct corners of box
 	tf::Quaternion quaternion = transform.getRotation();
-	// Create four vectors pointing at corners of box from tag center (assuming box is 0.5x0.5x0.5m).
-	tf::Vector3 corner0 = {-0.25, -0.25, 0};
-	tf::Vector3 corner1 = {-0.25, 0.25, 0};
-	tf::Vector3 corner2 = {0.25, -0.25, 0};
-	tf::Vector3 corner3 = {0.25, 0.25, 0};
+	// Create four vectors pointing at corners of box from tag center (assuming box is ~0.34x0.34x0.34m).
+	tf::Vector3 corner0 = {-0.23, -0.23, 0}; // sides are 0.34m, distance from center to corner is ~0.23m
+	tf::Vector3 corner1 = {-0.23, 0.23, 0};
+	tf::Vector3 corner2 = {0.23, -0.23, 0};
+	tf::Vector3 corner3 = {0.23, 0.23, 0};
 	// Rotate the vectors by the quaternion to make it follow rotation of tag
 	tf::Vector3 correctedVector0 = transform.getOrigin() + tf::quatRotate(quaternion, corner0);
 	tf::Vector3 correctedVector1 = transform.getOrigin() + tf::quatRotate(quaternion, corner1);
@@ -260,27 +407,6 @@ void fetchCorners(tf::StampedTransform const transform, int i)
 
 //**********************************************************************************************
 
-// Below is some sound stuff that isn't working
-
-/*int func()
-{
-
-	// Plays some sound.
-	//if (!buffer.loadFromFile(soundPath + "node_online.ogg"))
-	//	return -1; // error
-	//sound.setBuffer(buffer);
-
-	//sound.play();
-
-	for (int i = 0; i < 10; ++i)
-        std::cout << "I'm thread number one" << std::endl;
-
-
-
-}
-
- */
-
 int main(int argc, char **argv)
 {
 
@@ -295,7 +421,7 @@ int main(int argc, char **argv)
 	tf::TransformListener tagListener;
 
 	// create the publisher of the markerArray
-	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 10);
+	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 100);
 	ros::Publisher cornerPublisher = pubNodeHandle2.advertise<std_msgs::Float64MultiArray>("corners", 10);
 
 	// Set the ros looping rate to 20Hz
@@ -303,20 +429,8 @@ int main(int argc, char **argv)
 
 	ROS_INFO("Publishing markers to /tag_marker_array");
 	ROS_INFO("Publishing corners to /corners");
-	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), "and ar_transform_N");
+	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), " and ar_transform_N");
 
-
-	// Below is more stuff related to the sound stuff
-
-	/*	// create a thread with func() as entry point
-    sf::Thread thread(&func);
-
-    // run it
-    thread.launch();
-
-for (int i = 0; i < 10; ++i)
-        std::cout << "I'm thread main" << std::endl;
-	 */
 	// Sort of actual main()
 	while(ros::ok())
 	{
@@ -324,34 +438,37 @@ for (int i = 0; i < 10; ++i)
 		for (int looper = 0 ; looper < 6 ; looper++)
 		{
 
-			if (tagListener.canTransform( frame_id, transNameArray[looper], ros::Time(0)))
+			if (tagListener.canTransform(frame_id, transNameArray[looper], ros::Time(0)))
 			{
-				std::cout << "Found a transform! \n";
-				try
+				//std::cout << "Found a transform! \n";
+				try // This try is pretty large, but hey, it works...
 				{
 					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
 					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
-					fetchCorners(transArray[looper], looper);
-					for (int k = buildNumber ; k > 0 ; k--)
-					{
-						if (boxInCorrectPlace(transArray[looper], k-1))
+					// Fetch and filter position data here!! Somehow.. change all the transArray[looper] for Pose stuff after filterPosition
+					//if (filterPosition(transArray[looper], looper))
+					//{
+						//fetchCorners(transArray[looper], looper);
+						for (int k = buildNumber ; k > 0 ; k--)
 						{
-							makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
-							if (!markerPlaced[looper])
+							if (boxInCorrectPlace(transArray[looper], k-1))
 							{
-								markerPlaced[looper] = true;
-								buildNumber++;
-							}// end of if
-							std::cout << "Made it to green box markerMaker \n";
+								makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
+								if (!markerPlaced[looper])
+								{
+									markerPlaced[looper] = true;
+									buildNumber++;
+								}// end of if
+								//std::cout << "Made it to green box markerMaker \n";
 
-						} else // end of if
-						{
-							std::cout << "Made it to red box markerMaker \n";
-							makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.75 ,looper);
-							markerPlaced[looper] = false;
-						}
-					}// end of for
-
+							} else // end of if
+							{
+								//std::cout << "Made it to red box markerMaker \n";
+								makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
+								markerPlaced[looper] = false;
+							}
+						}// end of for
+					//}	
 				}// end of try
 				catch (tf::TransformException &ex)
 				{

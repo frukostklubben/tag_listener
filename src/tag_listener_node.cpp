@@ -237,7 +237,7 @@ bool filterPosition(tf::StampedTransform const tagTransform, int const id)
 void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const name,
 		double const id, double const red,  double const green, double const blue,  double const alpha , int const i)
 {
-	markerArray.markers.resize(6);
+	markerArray.markers.resize(10);
 	markerArray.markers[i].header.frame_id = frame_id;
 	markerArray.markers[i].header.stamp = ros::Time(0);
 	markerArray.markers[i].ns = name;
@@ -247,6 +247,10 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	// Create a quaternion matrix to be used to correct center of box
 	tf::Quaternion quaternion = tagTransform.getRotation();
 	// Create vector 0.165 from tag center (boxes are 33cm^3 isch).
+	tf::Vector3 corner0 = {-0.23, -0.23, 0}; // sides are 0.34m, distance from center to corner is ~0.23m
+	tf::Vector3 corner1 = {-0.23, 0.23, 0};
+	tf::Vector3 corner2 = {0.23, -0.23, 0};
+	tf::Vector3 corner3 = {0.23, 0.23, 0};
 	tf::Vector3 vector (0, 0, 0.165);
 	// Rotate the vector by the quaternion to make it follow rotation of tag
 	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
@@ -267,6 +271,42 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	markerArray.markers[i].color.g = green;
 	markerArray.markers[i].color.b = blue;
 	markerArray.markers[i].color.a = alpha; // alpha = opacity
+
+	tf::Vector3 cors[4];
+	cors[0]=corner0;
+	cors[1]=corner1;
+	cors[2]=corner2;
+	cors[3]=corner3;
+
+	for(int k=6;k<10;k++){
+	
+		markerArray.markers[k].scale.x = 0.05;
+		markerArray.markers[k].scale.y = 0.05;
+		markerArray.markers[k].scale.z = 0.05;
+		markerArray.markers[k].color.r = 0;
+		markerArray.markers[k].color.g = 0;
+		markerArray.markers[k].color.b = 1;
+		markerArray.markers[k].color.a = 1; // alpha = opacity
+
+	
+
+	tf::Vector3 correctedVector0 = tf::quatRotate(quaternion, cors[k-6]);
+
+	markerArray.markers[k].header.frame_id = frame_id;
+	markerArray.markers[k].header.stamp = ros::Time(0);
+	markerArray.markers[k].ns = "name";
+	markerArray.markers[k].id = k;
+	markerArray.markers[k].type = visualization_msgs::Marker::CUBE;
+	markerArray.markers[k].action = visualization_msgs::Marker::ADD;
+	markerArray.markers[k].pose.position.x = tagTransform.getOrigin().x() - correctedVector0.x();
+	markerArray.markers[k].pose.position.y = tagTransform.getOrigin().y() - correctedVector0.y();
+	markerArray.markers[k].pose.position.z = tagTransform.getOrigin().z() - correctedVector0.z();
+	markerArray.markers[k].pose.orientation.x = tagTransform.getRotation().x();
+	markerArray.markers[k].pose.orientation.y = tagTransform.getRotation().y();
+	markerArray.markers[k].pose.orientation.z = tagTransform.getRotation().z();
+	markerArray.markers[k].pose.orientation.w = tagTransform.getRotation().w();
+	
+	}
 
 }// end of makeMarkerArray();
 
@@ -406,8 +446,8 @@ int main(int argc, char **argv)
 					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
 					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
 					// Fetch and filter position data here!! Somehow.. change all the transArray[looper] for Pose stuff after filterPosition
-					if (filterPosition(transArray[looper], looper))
-					{
+					//if (filterPosition(transArray[looper], looper))
+					//{
 						fetchCorners(transArray[looper], looper);
 						for (int k = buildNumber ; k > 0 ; k--)
 						{
@@ -428,7 +468,7 @@ int main(int argc, char **argv)
 								markerPlaced[looper] = false;
 							}
 						}// end of for
-					}	
+					//}	
 				}// end of try
 				catch (tf::TransformException &ex)
 				{
