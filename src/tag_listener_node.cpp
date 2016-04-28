@@ -68,28 +68,36 @@
 #include <eigen3/Eigen/Core>
 #include <eigen_conversions/eigen_msg.h>
 
-double pi = 3.1415;
+#define pi 3.1415
+#define size2 6
 
-//#include <SFML/Audio.hpp>  Borken sound stuff
-//#include <SFML/System.hpp>
+
+//void sortAscending(int id);
+
+//bool filterPosition(tf::StampedTransform const tagTransform, int const id);
+
+void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const name,
+		int const k, double const red,  double const green, double const blue,  double const alpha , int const i);
+
+bool boxInCorrectPlace(tf::StampedTransform const transform, int const i);
+
+void fetchCorners(tf::StampedTransform const transform, int i);
 
 //****************************************************************************
 // Config stuff, muy importante!
 //****************************************************************************
 
-// The frame where you want your marker.
-std::string frame_id = "/camera_link";
-
 // Positions of tower blocks to be checked against IRL box position (boxes are cubic, 0.35m^3 -isch  32x35x32...)
 //Positions are stored X,Y,Z followed by rotation X, Y, Z, W.
 
 
-//This array is fugly because I need it to be 4 long for the quaternions
-const double posArray[12][4] = {{0,		0,		-1,		0},// Position of first box
-		{0,		0.32,	-1,		0}, 						// Position of second box
-		{0,		0.32,	-0.68,	0}, 					//
-		{0,		0,		-0.68,	0}, 					//
-		{0.35,	0,		-1,		0}, 						//
+//This array is fugly because I need it to be 4 long for the quaternions.
+// Make sure you add or remove the correct amount of positions when changing numberOfBoxes
+const double posArray[12][4] = {{2.5,		0,		0.1,		0},// Position of first box
+		{2.5,		0,	0.33,		0}, 						// Position of second box
+		{3,		0.33,	-0.68,	0}, 					//
+		{3,		0,		-0.68,	0}, 					//
+		{3,		0,		-0.06,	0}, 						//
 		{-0.35,	0.32,	-1,		0},						// You got it, position of sixth box.
 
 		//Next entries are rotations represented by quaternions, for your own sake, keep x/y/z = 0 and w = 1.
@@ -105,17 +113,41 @@ const double posArray[12][4] = {{0,		0,		-1,		0},// Position of first box
 
 
 // Position error margin for box (radius of error sphere) in meters.
-double posHysteresis = 0.05;
+double posHysteresis = 0.1;
 
 //Rotation error margin for box for handling only ONE axis, use: sin(ANGLE_IN_RADIANS/2). For more than 1 axis, you'll have to read about quaternions.
 double rotHysteresis = sin((5*pi)/360);
 
-// Sound stuff that doesn't work.
-//std::string soundPath = "/home/trykks/catkin_ws/src/tag_listener/sound/";
+//The number of boxes you want to use
+int numberOfBoxes = 1;
 
+// Keep track of how far into the build we are.
+int buildNumber = 1;
 
-//****************************************************************************
-//****************************************************************************
+// The frame where you want your marker.
+static std::string frame_id = "/camera_link";
+//Dirty fix
+int size;
+
+// Keep track of whether box is placed correct or not
+std::vector<bool> boxPlaced(1);
+
+// Container of all the front facing corners of all boxes
+Eigen::MatrixXd eigenCorners(1,1);
+
+//Keep track of number of positions recieved for each tag
+//std::vector<int> numberOfDataPoints;
+//Handle the actual datapoints
+//std::vector<std::vector<double>> sumOfDataPoints;
+//Store the filters poses of the tags
+//geometry_msgs::Pose meanPoseArray[1];
+//Store all datapoints
+//std::vector<double> storedDataPoints[1][1];
+
+int nrOfVisibleBoxes = 0;
+std::vector<int> boxVisible;
+
+//This is the fun part, if you want more than 6 boxes, you have to manually add transforms here:
 
 // name of all the transforms received from ar_track_alvar
 std::string transNameArray[] = {"/ar_transform_0", "/ar_transform_1", "/ar_transform_2", "/ar_transform_3",
@@ -138,28 +170,156 @@ tf::StampedTransform transform_marker_0, transform_marker_1, transform_marker_2,
 tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, transform_marker_2,
 		transform_marker_3, transform_marker_4, transform_marker_5};
 
-// Keep track of how far into the build we are.
-int buildNumber = 1;
+// You're done here.
 
-// Keep track of whether box is placed correct or not
-bool markerPlaced[] = {0,0,0,0,0,0};
+//****************************************************************************
+//****************************************************************************
 
-// Container of all the front facing corners of all boxes
-Eigen::MatrixXd eigenCorners(6,13);
 
-//Keep track of number of positions recieved for each tag
-int numberOfDataPoints[6];
-//Handle the actual datapoints
-double sumOfDataPoints[6][7];
-//Store the filters poses of the tags
-geometry_msgs::Pose meanPoseArray[6];
-//Store all datapoints
-double storedDataPoints[6][35];
+
+
+
+//**********************************************************************************************
+
+int main(int argc, char **argv)
+{
+
+	// init the ros node
+	ros::init(argc, argv,"tag_listener");
+
+	// create a bunch of node handles that we need
+	ros::NodeHandle pubNodehandle;
+	ros::NodeHandle pubNodeHandle2;
+
+	// create a transform that will be a copy of the transform between map and tag
+	tf::TransformListener tagListener;
+
+	// create the publisher of the markerArray
+	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 10);
+	ros::Publisher cornerPublisher = pubNodeHandle2.advertise<std_msgs::Float64MultiArray>("corners", 10);
+
+	// Set the ros looping rate to 20Hz
+	ros::Rate loop_rate(20);
+	//Set parameters from console
+	std::cout << "****************************************************************************" << std::endl;
+	std::cout << "Hello player! \n" << "How many boxes do you want in your tower?" << std::endl;
+	std::cin >> numberOfBoxes;
+	std::cout << "Cool! \n" << "I will use " << numberOfBoxes << " boxes to build." << std::endl;
+	std::cout << "\n \n" << std::endl;
+
+	//std::cout << "What coordinate system do you want to place the boxes in? \n" << "To use the global one, type: /map \n" 
+	//<< "To use the Kinect's, type: /camera_link \n" << std::endl;
+	//std::cin >> frame_id;
+
+	
+	
+
+	ROS_INFO("Publishing markers to /tag_marker_array");
+	ROS_INFO("Publishing corners to /corners");
+	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), " and ar_transform_N");
+
+
+	// Sort of actual main()
+	while(ros::ok())
+	{
+		
+		for (int looper = 0 ; looper < 6 ; looper++) // The number 15 is the number of availale tags to loop through, 
+		//if not high enough it will look for a specific one. Also, this must not be higher than the length of your markerNameArray() etc
+		{
+			
+			eigenCorners.resize(nrOfVisibleBoxes, 14);
+			//size = nrOfVisibleBoxes + 1;
+			std::cout << "boxes = " << boxPlaced.size() << std::endl;
+			if (tagListener.canTransform(frame_id, transNameArray[looper], ros::Time(0)))
+			{
+				//std::cout << "Found a transform! \n";
+				try // This try is pretty large, but hey, it works...
+				{
+					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
+					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
+					// Fetch and filter position data here!! Somehow.. change all the transArray[looper] for Pose stuff after filterPosition
+					//if (filterPosition(transArray[looper], looper))
+					//{
+						if(!(std::find(boxVisible.begin(), boxVisible.end(), looper) != boxVisible.end()))
+						{
+							boxVisible.push_back(looper);
+							nrOfVisibleBoxes++;
+							boxVisible.resize(nrOfVisibleBoxes);
+							boxPlaced.resize(nrOfVisibleBoxes);
+						}
+							for (int k = nrOfVisibleBoxes ; k > 0 ; k--)
+							{
+								//std::cout << k << std::endl;
+								for (int j = buildNumber; j > 0 ; j--)
+								{
+									// Need to loop through all build numbers as before
+									if (boxInCorrectPlace(transArray[looper], j)) // k should be build number isch...
+									{
+										makeMarkerArray(transArray[looper], markerNameArray[looper], k, 0, 1 ,0 ,1 ,looper); // move this to after the boxPlaced
+										fetchCorners(transArray[looper], k-1);
+										//std::cout << "looper = "<< looper << std::endl;
+										if (!boxPlaced.at(j-1))
+										{
+											boxPlaced.at(j-1) = true;
+											if (buildNumber < numberOfBoxes)
+											{
+												buildNumber++;	
+											} else {
+												std::cout << "All done, congratulations!" << std::endl;
+											}
+											
+										}// end of if
+										else {
+											break;
+										}
+										//std::cout << "Made it to green box markerMaker \n";
+
+									} else // end of if
+									{
+										//std::cout << "Made it to red box markerMaker \n";
+										makeMarkerArray(transArray[looper], markerNameArray[looper], buildNumber, 1, 0 ,0 ,0.5 ,looper);
+										fetchCorners(transArray[looper], k-1);
+										//boxPlaced.at(j-1) = false; //might break shit
+									}
+								}
+							}// end of for
+						
+				}//end of try 
+			
+	
+				catch (tf::TransformException &ex)
+				{
+					ROS_ERROR("%s",ex.what());
+					ros::Duration(1.0).sleep();
+					continue;
+				}
+
+			} // end of if
+
+		} // end of for
+
+		//Convert the Eigen::MatrixXd to a ros message, Float64MultiArray to allow it to be published
+		std_msgs::Float64MultiArray stdCorners;
+		//std::cout << "Didn't crash" << std::endl;
+		tf::matrixEigenToMsg(eigenCorners, stdCorners);
+
+		markerPublisher.publish(markerArray);
+		cornerPublisher.publish(stdCorners);
+
+		ros::spinOnce();
+		loop_rate.sleep();
+
+	}// end of while / sort of actual main()
+
+	return 0;
+
+} // end of main()
+
+
 
 //Sorts the storedDataPoints[id][] ascending values..
-void sortAscending(int id)
-{	
-	for (int k = 0; k < 6 ; k++)
+/*{	
+	for (int k = 0; k < numberOfBoxes ; k++)
 	{
 		//std::cout << "k in bubble sort = " << k << std::endl;
 		bool swapped = true;
@@ -183,9 +343,10 @@ void sortAscending(int id)
 	}
 }
 
+*/
 
 // Creates mean values of 5 positions to get a more stable value
-bool filterPosition(tf::StampedTransform const tagTransform, int const id)
+/*bool filterPosition(tf::StampedTransform const tagTransform, int const id)
 {
 	
 	if (numberOfDataPoints[id] < 5)
@@ -231,26 +392,33 @@ bool filterPosition(tf::StampedTransform const tagTransform, int const id)
 	}
 	
 }
-
+*/
 
 // Function that creates the marker.
 void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const name,
-		double const id, double const red,  double const green, double const blue,  double const alpha , int const i)
+		int const k, double const red,  double const green, double const blue,  double const alpha , int const i)
 {
-	markerArray.markers.resize(10);
+	
+	markerArray.markers.resize(7);//size+1); // + 4 corners for debugging // + 1 for the markBuild()
+	
 	markerArray.markers[i].header.frame_id = frame_id;
+
 	markerArray.markers[i].header.stamp = ros::Time(0);
 	markerArray.markers[i].ns = name;
-	markerArray.markers[i].id = id;
+	markerArray.markers[i].id = i;
 	markerArray.markers[i].type = visualization_msgs::Marker::CUBE;
 	markerArray.markers[i].action = visualization_msgs::Marker::ADD;
 	// Create a quaternion matrix to be used to correct center of box
 	tf::Quaternion quaternion = tagTransform.getRotation();
 	// Create vector 0.165 from tag center (boxes are 33cm^3 isch).
-	tf::Vector3 corner0 = {-0.23, -0.23, 0}; // sides are 0.34m, distance from center to corner is ~0.23m
+	
+	//Debug stuff
+	/*tf::Vector3 corner0 = {-0.23, -0.23, 0}; // sides are 0.34m, distance from center to corner is ~0.23m
 	tf::Vector3 corner1 = {-0.23, 0.23, 0};
 	tf::Vector3 corner2 = {0.23, -0.23, 0};
 	tf::Vector3 corner3 = {0.23, 0.23, 0};
+	*/
+
 	tf::Vector3 vector (0, 0, 0.165);
 	// Rotate the vector by the quaternion to make it follow rotation of tag
 	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
@@ -272,13 +440,43 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	markerArray.markers[i].color.b = blue;
 	markerArray.markers[i].color.a = alpha; // alpha = opacity
 
-	tf::Vector3 cors[4];
+
+	markerArray.markers[size2].header.frame_id = frame_id;	
+	markerArray.markers[size2].header.stamp = ros::Time(0);
+	markerArray.markers[size2].ns = "buildGhost";
+	markerArray.markers[size2].id = k;
+	markerArray.markers[size2].type = visualization_msgs::Marker::CUBE;
+	markerArray.markers[size2].action = visualization_msgs::Marker::ADD;
+
+	//ros::Duration d(0.5);
+	//markerArray.markers[size].lifetime = d;
+	
+	markerArray.markers[size2].pose.position.x = posArray[k-1][0];
+	markerArray.markers[size2].pose.position.y = posArray[k-1][1];
+	markerArray.markers[size2].pose.position.z = posArray[k-1][2];
+	
+	markerArray.markers[size2].pose.orientation.x = posArray[numberOfBoxes+(k-1)][0];
+	markerArray.markers[size2].pose.orientation.y = posArray[numberOfBoxes+(k-1)][1];
+	markerArray.markers[size2].pose.orientation.z = posArray[numberOfBoxes+(k-1)][2];
+	markerArray.markers[size2].pose.orientation.w = posArray[numberOfBoxes+(k-1)][3];
+	markerArray.markers[size2].scale.x = 0.34;
+	markerArray.markers[size2].scale.y = 0.34;
+	markerArray.markers[size2].scale.z = 0.34;
+	markerArray.markers[size2].color.r = 1;
+	markerArray.markers[size2].color.g = 1;
+	markerArray.markers[size2].color.b = 0;
+	markerArray.markers[size2].color.a = alpha-green; // alpha = opacity
+ 
+
+	//Below is for debugging of corners sent
+
+	/*tf::Vector3 cors[4];
 	cors[0]=corner0;
 	cors[1]=corner1;
 	cors[2]=corner2;
 	cors[3]=corner3;
 
-	for(int k=6;k<10;k++){
+	for(int k=numberOfBoxes;k<numberOfBoxes+4;k++){
 	
 		markerArray.markers[k].scale.x = 0.05;
 		markerArray.markers[k].scale.y = 0.05;
@@ -306,7 +504,7 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	markerArray.markers[k].pose.orientation.z = tagTransform.getRotation().z();
 	markerArray.markers[k].pose.orientation.w = tagTransform.getRotation().w();
 	
-	}
+	} */
 
 }// end of makeMarkerArray();
 
@@ -315,16 +513,14 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 {
 	// TODO ROTATION OF THE BOXES HAS TO BE FULLY HANDLED!! QUATERNIONS AND STUFF.
-	
-
 	double posXYZ[7];
-	posXYZ[0] = posArray[i][0]; //Positions
-	posXYZ[1] = posArray[i][1]; //
-	posXYZ[2] = posArray[i][2]; //
-	posXYZ[3] = posArray[i][3]; //Rotations (quaternions)
-	posXYZ[4] = posArray[i][4]; //
-	posXYZ[5] = posArray[i][5]; //
-	posXYZ[6] = posArray[i][6]; //
+	posXYZ[0] = posArray[i-1][0]; //Positions
+	posXYZ[1] = posArray[i-1][1]; //
+	posXYZ[2] = posArray[i-1][2]; //
+	posXYZ[3] = posArray[numberOfBoxes+i-1][0]; //Rotations (quaternions)
+	posXYZ[4] = posArray[numberOfBoxes+i-1][1]; //
+	posXYZ[5] = posArray[numberOfBoxes+i-1][2]; //
+	posXYZ[6] = posArray[numberOfBoxes+i-1][3]; //
 
 	//std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
 
@@ -348,7 +544,8 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 	errorX = (transform.getOrigin().x() - correctedVector.x()) - posXYZ[0]; // Error in X (Corrected to center, same as in makeMarkerArray)
 	errorY = (transform.getOrigin().y() - correctedVector.y()) - posXYZ[1]; // Error in Y (Corrected to center, same as in makeMarkerArray)
 	errorZ = (transform.getOrigin().z() - correctedVector.z()) - posXYZ[2]; // Error in Z (Corrected to center, same as in makeMarkerArray)
-
+	//std::cout << "buildNumber = " << i << std::endl;
+	std::cout << "errorX = " << errorX << " errorY = " << errorY << " errorZ = " << errorZ << std::endl;
 	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
 
 	//errorRotX = transform.getRotation().x() - posXYZ[3];
@@ -360,14 +557,13 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 
 	//std::cout << lengthOfErrorVec << "\n";
 	// Should handle all sides of a box now.. SHOULD
-	if ((lengthOfErrorVec < posHysteresis) and ((errorRotZ < rotHysteresis) or
-			(errorRotZ < rotHysteresis + 90) or (errorRotZ < rotHysteresis + 180) or (errorRotZ < rotHysteresis + 270)))
+	if ((lengthOfErrorVec < posHysteresis))// and ((errorRotZ < rotHysteresis) or
+			//(errorRotZ < rotHysteresis + 90) or (errorRotZ < rotHysteresis + 180) or (errorRotZ < rotHysteresis + 270)))
 		return true;
 	else
 		return false;
 
 }// End of boxInCorrectPlace()
-
 
 // Makes corners from the face of the tag.
 void fetchCorners(tf::StampedTransform const transform, int i)
@@ -375,17 +571,17 @@ void fetchCorners(tf::StampedTransform const transform, int i)
 	// Create a quaternion matrix to be used to correct corners of box
 	tf::Quaternion quaternion = transform.getRotation();
 	// Create four vectors pointing at corners of box from tag center (assuming box is ~0.34x0.34x0.34m).
-	tf::Vector3 corner0 = {-0.23, -0.23, 0}; // sides are 0.34m, distance from center to corner is ~0.23m
-	tf::Vector3 corner1 = {-0.23, 0.23, 0};
-	tf::Vector3 corner2 = {0.23, -0.23, 0};
-	tf::Vector3 corner3 = {0.23, 0.23, 0};
+	tf::Vector3 corner0 = {-0.2, -0.2, 0}; // sides are 0.34m, distance from center to corner is ~0.23m
+	tf::Vector3 corner1 = {-0.2, 0.2, 0};
+	tf::Vector3 corner2 = {0.2, -0.2, 0};
+	tf::Vector3 corner3 = {0.2, 0.2, 0};
 	// Rotate the vectors by the quaternion to make it follow rotation of tag
 	tf::Vector3 correctedVector0 = transform.getOrigin() + tf::quatRotate(quaternion, corner0);
 	tf::Vector3 correctedVector1 = transform.getOrigin() + tf::quatRotate(quaternion, corner1);
 	tf::Vector3 correctedVector2 = transform.getOrigin() + tf::quatRotate(quaternion, corner2);
 	tf::Vector3 correctedVector3 = transform.getOrigin() + tf::quatRotate(quaternion, corner3);
 
-	eigenCorners(i,0) = correctedVector0.getX();
+	/*eigenCorners(i,0) = correctedVector0.getX();
 	eigenCorners(i,1) = correctedVector0.getY();
 	eigenCorners(i,2) = correctedVector0.getZ();
 
@@ -402,99 +598,5 @@ void fetchCorners(tf::StampedTransform const transform, int i)
 	eigenCorners(i,11) = correctedVector3.getZ();
 
 	eigenCorners(i,12) = i;
-
+*/
 }
-
-//**********************************************************************************************
-
-int main(int argc, char **argv)
-{
-
-	// init the ros node
-	ros::init(argc, argv,"tag_listener");
-
-	// create a bunch of node handles that we need
-	ros::NodeHandle pubNodehandle;
-	ros::NodeHandle pubNodeHandle2;
-
-	// create a transform that will be a copy of the transform between map and tag
-	tf::TransformListener tagListener;
-
-	// create the publisher of the markerArray
-	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 100);
-	ros::Publisher cornerPublisher = pubNodeHandle2.advertise<std_msgs::Float64MultiArray>("corners", 10);
-
-	// Set the ros looping rate to 20Hz
-	ros::Rate loop_rate(20);
-
-	ROS_INFO("Publishing markers to /tag_marker_array");
-	ROS_INFO("Publishing corners to /corners");
-	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), " and ar_transform_N");
-
-	// Sort of actual main()
-	while(ros::ok())
-	{
-
-		for (int looper = 0 ; looper < 6 ; looper++)
-		{
-
-			if (tagListener.canTransform(frame_id, transNameArray[looper], ros::Time(0)))
-			{
-				//std::cout << "Found a transform! \n";
-				try // This try is pretty large, but hey, it works...
-				{
-					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
-					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
-					// Fetch and filter position data here!! Somehow.. change all the transArray[looper] for Pose stuff after filterPosition
-					//if (filterPosition(transArray[looper], looper))
-					//{
-						fetchCorners(transArray[looper], looper);
-						for (int k = buildNumber ; k > 0 ; k--)
-						{
-							if (boxInCorrectPlace(transArray[looper], k-1))
-							{
-								makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 0, 1 ,0 ,1 ,looper);
-								if (!markerPlaced[looper])
-								{
-									markerPlaced[looper] = true;
-									buildNumber++;
-								}// end of if
-								//std::cout << "Made it to green box markerMaker \n";
-
-							} else // end of if
-							{
-								//std::cout << "Made it to red box markerMaker \n";
-								makeMarkerArray(transArray[looper], markerNameArray[looper], looper, 1, 0 ,0 ,0.5 ,looper);
-								markerPlaced[looper] = false;
-							}
-						}// end of for
-					//}	
-				}// end of try
-				catch (tf::TransformException &ex)
-				{
-					ROS_ERROR("%s",ex.what());
-					ros::Duration(1.0).sleep();
-					continue;
-				}
-
-			} // end of if
-
-		} // end of for
-
-		//Convert the Eigen::MatrixXd to a ros message, Float64MultiArray to allow it to be published
-		std_msgs::Float64MultiArray stdCorners;
-		tf::matrixEigenToMsg(eigenCorners, stdCorners);
-
-		markerPublisher.publish(markerArray);
-		cornerPublisher.publish(stdCorners);
-
-		ros::spinOnce();
-		loop_rate.sleep();
-
-	}// end of while / sort of actual main()
-
-	return 0;
-
-} // end of main()
-
-
