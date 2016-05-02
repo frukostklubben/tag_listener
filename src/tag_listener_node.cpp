@@ -76,12 +76,13 @@
 
 //bool filterPosition(tf::StampedTransform const tagTransform, int const id);
 
+
 void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const name,
-		int const k, double const red,  double const green, double const blue,  double const alpha , int const i);
+		int const k, double const red,  double const green, double const blue,  double const alpha , int const i, bool const p);
 
 bool boxInCorrectPlace(tf::StampedTransform const transform, int const i);
 
-void fetchCorners(tf::StampedTransform const transform, int i, int p);
+void fetchCorners(tf::StampedTransform const transform, int i, int looper, int p);
 
 //****************************************************************************
 // Config stuff, muy importante!
@@ -93,9 +94,9 @@ void fetchCorners(tf::StampedTransform const transform, int i, int p);
 //This array is fugly because I need it to be 4 long for the quaternions.
 // Make sure you add the correct amount of positions when changing numberOfBoxes
 // IMPORTANT: if you ADD positions, you have to change the numberOfPositions accordingly.
-const double posArray[12][4] = {{2.5,		0,		0.1,		0},	// Position of first box
-		{2.5,		0,	0.33,		0}, 							// Position of second box
-		{3,		0.33,	-0.68,	0}, 								//
+const double posArray[12][4] = {{3,		0,		-0.8,		0},	// Position of first box
+		{3,		0,	-0.47,		0}, 							// Position of second box
+		{0,		0.33,	-0.68,	0}, 								//
 		{3,		0,		-0.68,	0}, 								//
 		{3,		0,		-0.06,	0}, 								//
 		{-0.35,	0.32,	-1,		0},									// You got it, position of sixth box.
@@ -128,8 +129,7 @@ int buildNumber = 1;
 
 // The frame where you want your marker.
 static std::string frame_id = "/camera_link";
-//Dirty fix
-int size;
+
 
 // Keep track of whether box is placed correct or not
 std::vector<bool> boxPlaced(1);
@@ -147,7 +147,7 @@ Eigen::MatrixXd eigenCorners(1,1);
 //std::vector<double> storedDataPoints[1][1];
 
 int nrOfVisibleBoxes = 0;
-std::vector<int> boxVisible;
+std::vector<int> boxVisible(0);
 
 //This is the fun part, if you want more than 6 boxes, you have to manually add transforms here:
 
@@ -213,8 +213,6 @@ int main(int argc, char **argv)
 	//<< "To use the Kinect's, type: /camera_link \n" << std::endl;
 	//std::cin >> frame_id;
 
-	int lastNumberOfBoxes;
-
 	ROS_INFO("Publishing markers to /tag_marker_array");
 	ROS_INFO("Publishing corners to /corners");
 	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), " and ar_transform_N");
@@ -223,11 +221,10 @@ int main(int argc, char **argv)
 	// Sort of actual main()
 	while(ros::ok())
 	{
-		
+		std::time_t timer = time(NULL);		
 		for (int looper = 0 ; looper < 6 ; looper++) // The number 6 is the number of availale tags to loop through, 
 		//if not high enough it will look for a specific one. Also, this must not be higher than the length of your markerNameArray() etc
 		{
-			
 			if (tagListener.canTransform(frame_id, transNameArray[looper], ros::Time(0)))
 			{
 				//std::cout << "Found a transform! \n";
@@ -241,45 +238,46 @@ int main(int argc, char **argv)
 						if(!(std::find(boxVisible.begin(), boxVisible.end(), looper) != boxVisible.end()))
 						{
 							boxVisible.push_back(looper);
-							nrOfVisibleBoxes++;
+							nrOfVisibleBoxes = boxVisible.size();
 							//boxVisible.resize(nrOfVisibleBoxes); // Shouldn't be needed because push_back
-							boxPlaced.resize(nrOfVisibleBoxes);
+							boxPlaced.resize(buildNumber+1);
+							
 							eigenCorners.resize(nrOfVisibleBoxes, 14);
-							size = nrOfVisibleBoxes + 1;
+							
 						}
 							for (int k = nrOfVisibleBoxes ; k > 0 ; k--)
 							{
 								//std::cout << k << std::endl;
-								for (int j = buildNumber; j > 0 ; j--)
+								for (int j = buildNumber ; j > 0 ; j--)
 								{
 									// Need to loop through all build numbers as before
-									if (boxInCorrectPlace(transArray[looper], j)) // k should be build number isch...
+									if (boxInCorrectPlace(transArray[looper], j)) 
 									{
-										makeMarkerArray(transArray[looper], markerNameArray[looper], k, 0, 1 ,0 ,1 ,looper); // move this to after the boxPlaced
-										fetchCorners(transArray[looper], k-1, 1);
+										
+										makeMarkerArray(transArray[looper], markerNameArray[looper], j, 0, 1 ,0 ,1 ,looper, false); // move this to after the boxPlaced: Huh??
+										fetchCorners(transArray[looper], k-1, looper, 1);
 										//std::cout << "looper = "<< looper << std::endl;
+										//std::cout << "j - 1 = " << j-1 << std::endl;
 										if (!boxPlaced.at(j-1))
 										{
 											boxPlaced.at(j-1) = true;
 											if (buildNumber < numberOfBoxes)
 											{
-												buildNumber++;	
+												buildNumber++;
+													
 											} else {
 												std::cout << "All done, congratulations!" << std::endl;
 											}
 											
-										}// end of if
-										else {
-											break;
-										}
-										//std::cout << "Made it to green box markerMaker \n";
-
+										}// end of if 
+										
 									} else // end of if
 									{
 										//std::cout << "Made it to red box markerMaker \n";
-										makeMarkerArray(transArray[looper], markerNameArray[looper], buildNumber, 1, 0 ,0 ,0.5 ,looper);
-										fetchCorners(transArray[looper], k-1, 0);
-										boxPlaced.at(j-1) = false; //might break shit
+
+										makeMarkerArray(transArray[looper], markerNameArray[looper], buildNumber, 1, 0 ,0 ,0.5 ,looper, true);
+										fetchCorners(transArray[looper], k-1, looper, 0);
+										//boxPlaced.at(j-1) = false; //might break shit Edit: Will break shit
 									}
 								}
 							}// end of for
@@ -297,13 +295,12 @@ int main(int argc, char **argv)
 			} // end of if (canTransform)
 
 		} // end of for (looper)
-		if (lastNumberOfBoxes > boxVisible.size())
-		{
-			nrOfVisibleBoxes--;
-		}
-		lastNumberOfBoxes = boxVisible.size();
-		boxVisible.clear();
+		std::time_t now = time(NULL);
+		//std::cout << "This all took " << now - timer << "s" << std::endl;
+		//std::cout << "Boxes visible: " << nrOfVisibleBoxes << std::endl;
 
+		std::vector<int>().swap(boxVisible);
+		nrOfVisibleBoxes = 0;
 		//Convert the Eigen::MatrixXd to a ros message, Float64MultiArray to allow it to be published
 		std_msgs::Float64MultiArray stdCorners;
 		//std::cout << "Didn't crash" << std::endl;
@@ -402,7 +399,7 @@ int main(int argc, char **argv)
 
 // Function that creates the marker.
 void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const name,
-		int const k, double const red,  double const green, double const blue,  double const alpha , int const i)
+		int const k, double const red,  double const green, double const blue,  double const alpha , int const i, bool const p)
 {
 	//tagTransform = transform of currently detected tag
 	//name = name of detected tag
@@ -412,11 +409,12 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	//blue = how much blue
 	//alpha = opacity
 	//i = current detected tag
+	//p = property false/true
 
-	markerArray.markers.resize(size+1);//size+1); // + 4 corners for debugging // + 1 for the markBuild()
-	
+	markerArray.markers.resize(i+2);
+	int size = markerArray.markers.size() - 1;
+
 	markerArray.markers[i].header.frame_id = frame_id;
-
 	markerArray.markers[i].header.stamp = ros::Time(0);
 	markerArray.markers[i].ns = name;
 	markerArray.markers[i].id = i;
@@ -454,17 +452,15 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	markerArray.markers[i].color.b = blue;
 	markerArray.markers[i].color.a = alpha; // alpha = opacity
 
+if (p == true){
 
 	markerArray.markers[size].header.frame_id = frame_id;	
 	markerArray.markers[size].header.stamp = ros::Time(0);
 	markerArray.markers[size].ns = "buildGhost";
-	markerArray.markers[size].id = k;
+	markerArray.markers[size].id = 100;
 	markerArray.markers[size].type = visualization_msgs::Marker::CUBE;
 	markerArray.markers[size].action = visualization_msgs::Marker::ADD;
 
-	//ros::Duration d(0.5);
-	//markerArray.markers[size].lifetime = d;
-	
 	markerArray.markers[size].pose.position.x = posArray[k-1][0];
 	markerArray.markers[size].pose.position.y = posArray[k-1][1];
 	markerArray.markers[size].pose.position.z = posArray[k-1][2];
@@ -479,9 +475,10 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	markerArray.markers[size].color.r = 1;
 	markerArray.markers[size].color.g = 1;
 	markerArray.markers[size].color.b = 0;
-	markerArray.markers[size].color.a = alpha-green; // alpha = opacity
- 
-
+	markerArray.markers[size].color.a = 0.5; // alpha = opacity
+ 	
+}
+	
 	//Below is for debugging of corners sent
 
 	/*tf::Vector3 cors[4];
@@ -534,12 +531,14 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 	posXYZ[0] = posArray[i-1][0]; //Positions
 	posXYZ[1] = posArray[i-1][1]; //
 	posXYZ[2] = posArray[i-1][2]; //
-	posXYZ[3] = posArray[numberOfBoxes+i-1][0]; //Rotations (quaternions)
-	posXYZ[4] = posArray[numberOfBoxes+i-1][1]; //
-	posXYZ[5] = posArray[numberOfBoxes+i-1][2]; //
-	posXYZ[6] = posArray[numberOfBoxes+i-1][3]; //
+	posXYZ[3] = posArray[numberOfPositions+(i-1)][0]; //Rotations (quaternions)
+	posXYZ[4] = posArray[numberOfPositions+(i-1)][1]; //
+	posXYZ[5] = posArray[numberOfPositions+(i-1)][2]; //
+	posXYZ[6] = posArray[numberOfPositions+(i-1)][3]; //
 
-	//std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
+
+
+	std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
 
 	double errorX;
 	double errorY;
@@ -561,8 +560,8 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 	errorX = (transform.getOrigin().x() - correctedVector.x()) - posXYZ[0]; // Error in X (Corrected to center, same as in makeMarkerArray)
 	errorY = (transform.getOrigin().y() - correctedVector.y()) - posXYZ[1]; // Error in Y (Corrected to center, same as in makeMarkerArray)
 	errorZ = (transform.getOrigin().z() - correctedVector.z()) - posXYZ[2]; // Error in Z (Corrected to center, same as in makeMarkerArray)
-	//std::cout << "buildNumber = " << i << std::endl;
-	std::cout << "errorX = " << errorX << " errorY = " << errorY << " errorZ = " << errorZ << std::endl;
+	//std::cout << "buildNumber in boxInCorrectPlace = " << i << std::endl;
+	//std::cout << "errorX = " << errorX << " errorY = " << errorY << " errorZ = " << errorZ << std::endl;
 	lengthOfErrorVec = sqrt(pow(errorX,2)+pow(errorY,2)+pow(errorZ,2));
 
 	//errorRotX = transform.getRotation().x() - posXYZ[3];
@@ -574,19 +573,23 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 
 	//std::cout << lengthOfErrorVec << "\n";
 	// Should handle all sides of a box now.. SHOULD
-	if ((lengthOfErrorVec < posHysteresis))// and ((errorRotZ < rotHysteresis) or
+	if ((lengthOfErrorVec < posHysteresis)) {
+	// and ((errorRotZ < rotHysteresis) or
 			//(errorRotZ < rotHysteresis + 90) or (errorRotZ < rotHysteresis + 180) or (errorRotZ < rotHysteresis + 270)))
+	//std::cout << "true" << std::endl;
 		return true;
-	else
+	} else{
+		//std::cout << "false" << std::endl;
 		return false;
+	}
 
 }// End of boxInCorrectPlace()
 
 // Makes corners from the face of the tag.
-void fetchCorners(tf::StampedTransform const transform, int i, int p)
+void fetchCorners(tf::StampedTransform const transform, int i, int id, int p)
 {
 	//transform = transform of the currently detected tag
-	//i = current visible tag
+	//i = current visible tag (isch)
 	//p = property of detected box
 
 	// Create a quaternion matrix to be used to correct corners of box
@@ -618,6 +621,6 @@ void fetchCorners(tf::StampedTransform const transform, int i, int p)
 	eigenCorners(i,10) = correctedVector3.getY();
 	eigenCorners(i,11) = correctedVector3.getZ();
 
-	eigenCorners(i,12) = i;
+	eigenCorners(i,12) = id;
 	eigenCorners(i,13) = p;
 }
