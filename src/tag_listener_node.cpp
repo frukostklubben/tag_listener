@@ -96,7 +96,7 @@ void fetchCorners(tf::StampedTransform const transform, int i, int looper, int p
 // IMPORTANT: if you ADD positions, you have to change the numberOfPositions accordingly.
 const double posArray[12][4] = {{3,		0,		-0.8,		0},	// Position of first box
 		{3,		0,	-0.47,		0}, 							// Position of second box
-		{0,		0.33,	-0.68,	0}, 								//
+		{3,		0.7,	-0.8,	0}, 								//
 		{3,		0,		-0.68,	0}, 								//
 		{3,		0,		-0.06,	0}, 								//
 		{-0.35,	0.32,	-1,		0},									// You got it, position of sixth box.
@@ -177,7 +177,7 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 //****************************************************************************
 //****************************************************************************
 
-
+int size;
 
 
 
@@ -185,7 +185,7 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 
 int main(int argc, char **argv)
 {
-
+	bool notDone = true;
 	// init the ros node
 	ros::init(argc, argv,"tag_listener");
 
@@ -195,6 +195,9 @@ int main(int argc, char **argv)
 
 	// create a transform that will be a copy of the transform between map and tag
 	tf::TransformListener tagListener;
+
+	markerArray.markers.resize(numberOfPositions + 1);
+	size = markerArray.markers.size() - 1;
 
 	// create the publisher of the markerArray
 	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 10);
@@ -219,7 +222,7 @@ int main(int argc, char **argv)
 
 
 	// Sort of actual main()
-	while(ros::ok())
+	while(ros::ok() && notDone)
 	{
 		std::time_t timer = time(NULL);		
 		for (int looper = 0 ; looper < 6 ; looper++) // The number 6 is the number of availale tags to loop through, 
@@ -238,7 +241,7 @@ int main(int argc, char **argv)
 						if(!(std::find(boxVisible.begin(), boxVisible.end(), looper) != boxVisible.end()))
 						{
 							boxVisible.push_back(looper);
-							nrOfVisibleBoxes = boxVisible.size();
+							nrOfVisibleBoxes = boxVisible.size()+1;
 							//boxVisible.resize(nrOfVisibleBoxes); // Shouldn't be needed because push_back
 							boxPlaced.resize(buildNumber+1);
 							
@@ -253,7 +256,6 @@ int main(int argc, char **argv)
 									// Need to loop through all build numbers as before
 									if (boxInCorrectPlace(transArray[looper], j)) 
 									{
-										
 										makeMarkerArray(transArray[looper], markerNameArray[looper], j, 0, 1 ,0 ,1 ,looper, false); // move this to after the boxPlaced: Huh??
 										fetchCorners(transArray[looper], k-1, looper, 1);
 										//std::cout << "looper = "<< looper << std::endl;
@@ -266,12 +268,13 @@ int main(int argc, char **argv)
 												buildNumber++;
 													
 											} else {
+												notDone = false;
 												std::cout << "All done, congratulations!" << std::endl;
 											}
 											
 										}// end of if 
-										
-									} else // end of if
+										else break; // Needs to be herer to not break shit. No clue......
+									} else if (notDone)// end of if
 									{
 										//std::cout << "Made it to red box markerMaker \n";
 
@@ -411,8 +414,7 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	//i = current detected tag
 	//p = property false/true
 
-	markerArray.markers.resize(i+2);
-	int size = markerArray.markers.size() - 1;
+	
 
 	markerArray.markers[i].header.frame_id = frame_id;
 	markerArray.markers[i].header.stamp = ros::Time(0);
@@ -527,18 +529,18 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 	// i = current visible tag
 
 	//TODO: ROTATION OF THE BOXES HAS TO BE FULLY HANDLED!! QUATERNIONS AND STUFF.
-	double posXYZ[7];
+	double posXYZ[3];
 	posXYZ[0] = posArray[i-1][0]; //Positions
 	posXYZ[1] = posArray[i-1][1]; //
 	posXYZ[2] = posArray[i-1][2]; //
-	posXYZ[3] = posArray[numberOfPositions+(i-1)][0]; //Rotations (quaternions)
-	posXYZ[4] = posArray[numberOfPositions+(i-1)][1]; //
-	posXYZ[5] = posArray[numberOfPositions+(i-1)][2]; //
-	posXYZ[6] = posArray[numberOfPositions+(i-1)][3]; //
+	//posXYZ[3] = posArray[numberOfPositions+(i-1)][0]; //Rotations (quaternions)
+	//posXYZ[4] = posArray[numberOfPositions+(i-1)][1]; //
+	//posXYZ[5] = posArray[numberOfPositions+(i-1)][2]; //
+	//posXYZ[6] = posArray[numberOfPositions+(i-1)][3]; //
 
 
 
-	std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
+	//std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
 
 	double errorX;
 	double errorY;
