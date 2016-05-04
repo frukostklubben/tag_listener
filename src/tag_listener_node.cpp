@@ -216,15 +216,25 @@ int main(int argc, char **argv)
 	//<< "To use the Kinect's, type: /camera_link \n" << std::endl;
 	//std::cin >> frame_id;
 
-	ROS_INFO("Publishing markers to /tag_marker_array");
-	ROS_INFO("Publishing corners to /corners");
-	ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), " and ar_transform_N");
+	std::time_t timeStart = time(NULL);
+	std::time_t timeNow = time(NULL);
+	while (abs(timeNow - timeStart) < 6)
+	{
+		std::cout << "\r" <<"Game will start in " << 6 - (timeNow - timeStart) << " seconds.";
+		timeNow = time(NULL);
+	}
+	std::cout << "\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n" << "Game started! Good luck!" << std::endl;
+	std::cout << "\n \n \n \n \n \n \n \n" << std::endl;
+
+	//ROS_INFO("Publishing markers to /tag_marker_array");
+	//ROS_INFO("Publishing corners to /corners");
+	//ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), " and ar_transform_N");
 
 
 	// Sort of actual main()
 	while(ros::ok() && notDone)
 	{
-		std::time_t timer = time(NULL);		
+		//std::time_t timer = time(NULL);		
 		for (int looper = 0 ; looper < 6 ; looper++) // The number 6 is the number of availale tags to loop through, 
 		//if not high enough it will look for a specific one. Also, this must not be higher than the length of your markerNameArray() etc
 		{
@@ -298,7 +308,7 @@ int main(int argc, char **argv)
 			} // end of if (canTransform)
 
 		} // end of for (looper)
-		std::time_t now = time(NULL);
+		//std::time_t now = time(NULL);
 		//std::cout << "This all took " << now - timer << "s" << std::endl;
 		//std::cout << "Boxes visible: " << nrOfVisibleBoxes << std::endl;
 
