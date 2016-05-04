@@ -151,7 +151,7 @@ add_executable(tag_listener_node src/tag_listener_node.cpp )
 # target_link_libraries(tag_listener_node
 #   ${catkin_LIBRARIES}
 # )
-target_link_libraries(tag_listener_node ${catkin_LIBRARIES} sfml-audio sfml-system)
+target_link_libraries(tag_listener_node ${catkin_LIBRARIES})
 #############
 ## Install ##
 #############
