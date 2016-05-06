@@ -82,7 +82,9 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 
 bool boxInCorrectPlace(tf::StampedTransform const transform, int const i);
 
-void fetchCorners(tf::StampedTransform const transform, int i, int looper, int p);
+void fetchCorners(tf::StampedTransform const transform, int eigenIndex, int looper, int p);
+
+bool buildPositionVisible (tf::StampedTransform const tagTransform, tf::StampedTransform const robotTransform, geometry_msgs::Pose const buildPose);
 
 //****************************************************************************
 // Config stuff, muy importante!
@@ -163,8 +165,6 @@ std::string transMarkerNameArray[] = {"transform_marker_0", "transform_marker_1"
 std::string markerNameArray[] = {"marker_0", "marker_1", "marker_2",
 		"marker_3", "marker_4", "marker_5"};
 
-// array to be filled with corresponding markers
-visualization_msgs::MarkerArray markerArray;
 
 // create all the transforms for all the markers and place them in an array
 tf::StampedTransform transform_marker_0, transform_marker_1, transform_marker_2, transform_marker_3, transform_marker_4, transform_marker_5;
@@ -176,9 +176,16 @@ tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, tra
 
 //****************************************************************************
 //****************************************************************************
+  // No touchy!!
 
 int size;
 
+geometry_msgs::Pose buildPose;
+
+// array to be filled with corresponding markers
+visualization_msgs::MarkerArray markerArray;
+
+tf::StampedTransform robotTransform;
 
 
 //**********************************************************************************************
@@ -192,16 +199,29 @@ int main(int argc, char **argv)
 	// create a bunch of node handles that we need
 	ros::NodeHandle pubNodehandle;
 	ros::NodeHandle pubNodeHandle2;
+	ros::NodeHandle pubNodehandle3;
 
 	// create a transform that will be a copy of the transform between map and tag
 	tf::TransformListener tagListener;
+	tf::TransformListener robotListener;
 
 	markerArray.markers.resize(numberOfPositions + 1);
 	size = markerArray.markers.size() - 1;
 
+	int eigenIndex = 0;
+
+	buildPose.position.x = posArray[0][0];
+	buildPose.position.y = posArray[0][1];
+	buildPose.position.z = posArray[0][2];
+	buildPose.orientation.x = posArray[numberOfPositions][0];
+	buildPose.orientation.y = posArray[numberOfPositions][1];
+	buildPose.orientation.z = posArray[numberOfPositions][2];
+	buildPose.orientation.w = posArray[numberOfPositions][3];
+
 	// create the publisher of the markerArray
 	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 10);
 	ros::Publisher cornerPublisher = pubNodeHandle2.advertise<std_msgs::Float64MultiArray>("corners", 10);
+	ros::Publisher nextBoxPublisher = pubNodehandle3.advertise<geometry_msgs::Pose>("nextBoxPose", 10); 
 
 	// Set the ros looping rate to 20Hz
 	ros::Rate loop_rate(20);
@@ -238,11 +258,16 @@ int main(int argc, char **argv)
 		for (int looper = 0 ; looper < 6 ; looper++) // The number 6 is the number of availale tags to loop through, 
 		//if not high enough it will look for a specific one. Also, this must not be higher than the length of your markerNameArray() etc
 		{
-			if (tagListener.canTransform(frame_id, transNameArray[looper], ros::Time(0)))
+			if (tagListener.canTransform(frame_id, transNameArray[looper], ros::Time(0)) 
+				&& robotListener.canTransform("/map", "/camera_link", ros::Time(0)))
 			{
 				//std::cout << "Found a transform! \n";
 				try // This try is pretty large, but hey, it works...
 				{
+					
+					robotListener.waitForTransform("/map", "/camera_link", ros::Time(0), ros::Duration(0,1));
+					robotListener.lookupTransform("/map", "/camera_link", ros::Time(0), robotTransform);
+
 					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
 					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
 					// Fetch and filter position data here!! Somehow.. change all the transArray[looper] for Pose stuff after filterPosition
@@ -263,39 +288,46 @@ int main(int argc, char **argv)
 								//std::cout << k << std::endl;
 								for (int j = buildNumber ; j > 0 ; j--)
 								{
-									// Need to loop through all build numbers as before
-									if (boxInCorrectPlace(transArray[looper], j)) 
-									{
-										makeMarkerArray(transArray[looper], markerNameArray[looper], j, 0, 1 ,0 ,1 ,looper, false); // move this to after the boxPlaced: Huh??
-										fetchCorners(transArray[looper], k-1, looper, 1);
-										//std::cout << "looper = "<< looper << std::endl;
-										//std::cout << "j - 1 = " << j-1 << std::endl;
-										if (!boxPlaced.at(j-1))
+									//if (buildPositionVisible(transArray[looper], robotTransform, buildPose))
+									//{
+										// Need to loop through all build numbers as before
+										if (boxInCorrectPlace(transArray[looper], j)) 
 										{
-											boxPlaced.at(j-1) = true;
-											if (buildNumber < numberOfBoxes)
+											makeMarkerArray(transArray[looper], markerNameArray[looper], j, 0, 1 ,0 ,1 ,looper, false); // move this to after the boxPlaced: Huh??
+											fetchCorners(transArray[looper], eigenIndex, looper, 1);
+											eigenIndex++;
+											//std::cout << "looper = "<< looper << std::endl;
+											//std::cout << "j - 1 = " << j-1 << std::endl;
+											if (!boxPlaced.at(j-1))
 											{
-												buildNumber++;
-													
-											} else {
-												notDone = false;
-												std::cout << "All done, congratulations!" << std::endl;
-											}
-											
-										}// end of if 
-										else break; // Needs to be herer to not break shit. No clue......
-									} else if (notDone)// end of if
-									{
-										//std::cout << "Made it to red box markerMaker \n";
+												boxPlaced.at(j-1) = true;
+												if (buildNumber < numberOfBoxes)
+												{
+													buildNumber++;
+														
+												} else {
+													notDone = false;
+													std::cout << "All done, congratulations!" << std::endl;
+												}
+												
+											}// end of if 
+											else break; // Needs to be here to not break shit. No clue......
+										} else if (notDone)// end of if
+										{
+											//std::cout << "Made it to red box markerMaker \n";
 
-										makeMarkerArray(transArray[looper], markerNameArray[looper], buildNumber, 1, 0 ,0 ,0.5 ,looper, true);
-										fetchCorners(transArray[looper], k-1, looper, 0);
-										//boxPlaced.at(j-1) = false; //might break shit Edit: Will break shit
-									}
+											makeMarkerArray(transArray[looper], markerNameArray[looper], buildNumber, 1, 0 ,0 ,0.5 ,looper, true);
+											fetchCorners(transArray[looper], eigenIndex, looper, 0);
+											eigenIndex++;
+											//boxPlaced.at(j-1) = false; //might break shit Edit: Will break shit
+										//} else {
+											//publish suggested new position;
+										}
+									//}
 								}
-							}// end of for
+							}// end of for (visibleBoxes)
 						
-				}//end of try 
+				}//end of try (transform)
 			
 	
 				catch (tf::TransformException &ex)
@@ -311,7 +343,7 @@ int main(int argc, char **argv)
 		//std::time_t now = time(NULL);
 		//std::cout << "This all took " << now - timer << "s" << std::endl;
 		//std::cout << "Boxes visible: " << nrOfVisibleBoxes << std::endl;
-
+		eigenIndex = 0;
 		std::vector<int>().swap(boxVisible);
 		nrOfVisibleBoxes = 0;
 		//Convert the Eigen::MatrixXd to a ros message, Float64MultiArray to allow it to be published
@@ -321,6 +353,7 @@ int main(int argc, char **argv)
 
 		markerPublisher.publish(markerArray);
 		cornerPublisher.publish(stdCorners);
+		nextBoxPublisher.publish(buildPose);
 
 		ros::spinOnce();
 		loop_rate.sleep();
@@ -466,6 +499,8 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 
 if (p == true){
 
+
+
 	markerArray.markers[size].header.frame_id = frame_id;	
 	markerArray.markers[size].header.stamp = ros::Time(0);
 	markerArray.markers[size].ns = "buildGhost";
@@ -489,6 +524,18 @@ if (p == true){
 	markerArray.markers[size].color.b = 0;
 	markerArray.markers[size].color.a = 0.5; // alpha = opacity
  	
+	
+
+	buildPose.position.x = posArray[(k-1)][0];
+	buildPose.position.y = posArray[(k-1)][1];
+	buildPose.position.z = posArray[(k-1)][2];
+	buildPose.orientation.x = posArray[numberOfPositions+(k-1)][0];
+	buildPose.orientation.y = posArray[numberOfPositions+(k-1)][1];
+	buildPose.orientation.z = posArray[numberOfPositions+(k-1)][2];
+	buildPose.orientation.w = posArray[numberOfPositions+(k-1)][3];
+
+
+
 }
 	
 	//Below is for debugging of corners sent
@@ -547,8 +594,6 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 	//posXYZ[4] = posArray[numberOfPositions+(i-1)][1]; //
 	//posXYZ[5] = posArray[numberOfPositions+(i-1)][2]; //
 	//posXYZ[6] = posArray[numberOfPositions+(i-1)][3]; //
-
-
 
 	//std::cout << posXYZ[0] << " " << posXYZ[1] << " " << posXYZ[2] << "\n";
 
@@ -635,4 +680,13 @@ void fetchCorners(tf::StampedTransform const transform, int i, int id, int p)
 
 	eigenCorners(i,12) = id;
 	eigenCorners(i,13) = p;
+}
+
+bool buildPositionVisible (tf::StampedTransform const tagTransform, tf::StampedTransform const robotTransform,
+ geometry_msgs::Pose const buildPose)
+{
+ if (true)
+ 	return true;
+ else
+  return false;
 }
