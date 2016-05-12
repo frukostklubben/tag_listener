@@ -96,12 +96,12 @@ bool buildPositionVisible (tf::StampedTransform const tagTransform, tf::StampedT
 //This array is fugly because I need it to be 4 long for the quaternions.
 // Make sure you add the correct amount of positions when changing numberOfBoxes
 // IMPORTANT: if you ADD positions, you have to change the numberOfPositions accordingly.
-const double posArray[12][4] = {{3,		0,		-0.8,		0},	// Position of first box
-		{3,		0.345,	-0.8,		0}, 							// Position of second box
-		{3-0.345,		0,	-0.8,	0}, 								//
-		{3,		0,		-0.8+0.34,	0}, 								//
-		{0.345,		0,		-0.8,	0}, 								//
-		{0,	0,	-0.8+0.34+0.34,		0},									// You got it, position of sixth box.
+const double posArray[12][4] = {{3,		0,		-0.76,		0},	// Position of first box
+		{3,			0.342,	-0.76,				0}, 							// Position of second box
+		{3-0.342,		0,	-0.76,				0}, 								//
+		{3,				0,	-0.76+0.32,			0}, 								//
+		{3,			-0.342,	-0.76,				0}, 								//
+		{3,				0,	-0.76+0.32+0.32,		0},									// You got it, position of sixth box.
 
 		//Next entries are rotations represented by quaternions, for your own sake, keep x/y/z = 0 and w = 1.
 		// Read up on quaternions if you want to be a cool kid and have them something other than zero.
@@ -115,40 +115,14 @@ const double posArray[12][4] = {{3,		0,		-0.8,		0},	// Position of first box
 
 int numberOfPositions = 6;
 
-
-
 // Position error margin for box (radius of error sphere) in meters.
-double posHysteresis = 0.1;
+double posHysteresis = 0.125;
 
 //Rotation error margin for box for handling only ONE axis, use: sin(ANGLE_IN_RADIANS/2). For more than 1 axis, you'll have to read about quaternions.
 double rotHysteresis = sin((5*pi)/360);
 
-//The number of boxes you want to use
-int numberOfBoxes = 1;
-
-// Keep track of how far into the build we are.
-int buildNumber = 1;
-
 // The frame where you want your marker.
 static std::string frame_id = "/camera_link";
-
-
-// Keep track of whether box is placed correct or not
-std::vector<bool> boxPlaced(1);
-
-// Container of all the front facing corners of all boxes
-Eigen::MatrixXd eigenCorners;
-
-//Keep track of number of positions recieved for each tag
-//std::vector<int> numberOfDataPoints;
-//Handle the actual datapoints
-//std::vector<std::vector<double>> sumOfDataPoints;
-//Store the filters poses of the tags
-//geometry_msgs::Pose meanPoseArray[1];
-//Store all datapoints
-//std::vector<double> storedDataPoints[1][1];
-
-
 
 //This is the fun part, if you want more than 6 boxes, you have to manually add transforms here:
 
@@ -163,7 +137,6 @@ std::string transMarkerNameArray[] = {"transform_marker_0", "transform_marker_1"
 // names of all the markers
 std::string markerNameArray[] = {"marker_0", "marker_1", "marker_2",
 		"marker_3", "marker_4", "marker_5"};
-
 
 // create all the transforms for all the markers and place them in an array
 tf::StampedTransform transform_marker_0, transform_marker_1, transform_marker_2, transform_marker_3, transform_marker_4, transform_marker_5;
@@ -189,6 +162,28 @@ tf::StampedTransform robotTransform;
 visualization_msgs::Marker marker;
 
 geometry_msgs::PoseStamped newCoord;
+
+// Keep track of whether box is placed correct or not
+std::vector<bool> boxPlaced(1);
+
+// Container of all the front facing corners of all boxes
+Eigen::MatrixXd eigenCorners;
+
+//The number of boxes you want to use (Is set in runtime!!)
+int numberOfBoxes = 1;
+
+// Keep track of how far into the build we are.
+int buildNumber = 1;
+
+
+//Keep track of number of positions recieved for each tag
+//std::vector<int> numberOfDataPoints;
+//Handle the actual datapoints
+//std::vector<std::vector<double>> sumOfDataPoints;
+//Store the filters poses of the tags
+//geometry_msgs::Pose meanPoseArray[1];
+//Store all datapoints
+//std::vector<double> storedDataPoints[1][1];
 
 
 //**********************************************************************************************
@@ -311,7 +306,7 @@ int main(int argc, char **argv)
 									
 										if (!(std::find(eigenIndexVec.begin(), eigenIndexVec.end(), looper) != eigenIndexVec.end()))
 										{
-											fetchCorners(transArray[looper], eigenIndex, looper, 1, buildNumber-1, false);
+											fetchCorners(transArray[looper], eigenIndex, looper, -1, buildNumber-1, false);
 											eigenIndexVec.push_back(looper);
 											eigenIndex++;
 										}
@@ -390,7 +385,7 @@ int main(int argc, char **argv)
 				}
 				newCoord.pose.position.y = posArray[buildNumber-1][1];
 				newCoord.pose.position.z = posArray[buildNumber-1][2];
-				fetchCorners(transArray[0], nrOfVisibleBoxes,1,1,1, true); // only interested in the bool, rest is placeholder
+				fetchCorners(transArray[0], nrOfVisibleBoxes,1,-3,1, true); // only interested in the -3 and bool, rest is placeholder
 				coordSet = true;
 				newCoordPublisher.publish(newCoord);
 			}
@@ -523,7 +518,7 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	tf::Vector3 corner3 = {0.23, 0.23, 0};
 	*/
 
-	tf::Vector3 vector (0, 0, 0.165);
+	tf::Vector3 vector (0, 0, 0.16);
 	// Rotate the vector by the quaternion to make it follow rotation of tag
 	tf::Vector3 correctedVector = tf::quatRotate(quaternion, vector);
 
@@ -536,9 +531,9 @@ void makeMarkerArray(tf::StampedTransform const tagTransform, std::string const 
 	markerArray.markers[i].pose.orientation.y = tagTransform.getRotation().y();
 	markerArray.markers[i].pose.orientation.z = tagTransform.getRotation().z();
 	markerArray.markers[i].pose.orientation.w = tagTransform.getRotation().w();
-	markerArray.markers[i].scale.x = 0.34;
-	markerArray.markers[i].scale.y = 0.34;
-	markerArray.markers[i].scale.z = 0.34;
+	markerArray.markers[i].scale.x = 0.32;
+	markerArray.markers[i].scale.y = 0.32;
+	markerArray.markers[i].scale.z = 0.32;
 	markerArray.markers[i].color.r = red;
 	markerArray.markers[i].color.g = green;
 	markerArray.markers[i].color.b = blue;
@@ -563,9 +558,9 @@ if (p == true){
 	markerArray.markers[size].pose.orientation.y = posArray[numberOfPositions+(k-1)][1];
 	markerArray.markers[size].pose.orientation.z = posArray[numberOfPositions+(k-1)][2];
 	markerArray.markers[size].pose.orientation.w = posArray[numberOfPositions+(k-1)][3];
-	markerArray.markers[size].scale.x = 0.34;
-	markerArray.markers[size].scale.y = 0.34;
-	markerArray.markers[size].scale.z = 0.34;
+	markerArray.markers[size].scale.x = 0.32;
+	markerArray.markers[size].scale.y = 0.32;
+	markerArray.markers[size].scale.z = 0.32;
 	markerArray.markers[size].color.r = 1;
 	markerArray.markers[size].color.g = 1;
 	markerArray.markers[size].color.b = 0;
@@ -696,11 +691,11 @@ void fetchCorners(tf::StampedTransform const transform, int i, int id, int p, in
 
 		// Create a quaternion matrix to be used to correct corners of box
 		tf::Quaternion quaternion = transform.getRotation();
-		// Create four vectors pointing at corners of box from tag center (assuming box is ~0.34x0.34x0.34m).
-		tf::Vector3 corner0 = {-0.165, -0.165, 0}; // sides are 0.34m, distance from center to edge is 0.165m
-		tf::Vector3 corner1 = {-0.165, 0.165, 0};
-		tf::Vector3 corner2 = {0.165, -0.165, 0};
-		tf::Vector3 corner3 = {0.165, 0.165, 0};
+		// Create four vectors pointing at corners of box from tag center (assuming box is ~0.32x0.32x0.32m).
+		tf::Vector3 corner0 = {-0.16, -0.16, 0}; // sides are 0.34m, distance from center to edge is 0.16m
+		tf::Vector3 corner1 = {-0.16, 0.16, 0};
+		tf::Vector3 corner2 = {0.16, -0.16, 0};
+		tf::Vector3 corner3 = {0.16, 0.16, 0};
 		// Rotate the vectors by the quaternion to make it follow rotation of tag
 		tf::Vector3 correctedVector0 = transform.getOrigin() + tf::quatRotate(quaternion, corner0);
 		tf::Vector3 correctedVector1 = transform.getOrigin() + tf::quatRotate(quaternion, corner1);
@@ -731,10 +726,10 @@ void fetchCorners(tf::StampedTransform const transform, int i, int id, int p, in
 		// x = depth
 		// y = width
 		// z = height
-		corner0 = {-0.165, -0.165, -0.165}; 
-		corner1 = {0.165, -0.165, -0.165};
-		corner2 = {-0.165, 0.165, -0.165};
-		corner3 = {0.165, 0.165, -0.165};
+		corner0 = {-0.16, -0.16, -0.16}; 
+		corner1 = {0.16, -0.16, -0.16};
+		corner2 = {-0.16, 0.16, -0.16};
+		corner3 = {0.16, 0.16, -0.16};
 
 		tf::Vector3 buildCenter = {posArray[buildNumber][0], posArray[buildNumber][1], posArray[buildNumber][2]};
 
@@ -765,10 +760,10 @@ void fetchCorners(tf::StampedTransform const transform, int i, int id, int p, in
 	}else{
 
 		// Create four vectors pointing at bottom corners of new navigation position.
-		tf::Vector3 corner0 = {-1, -0.165, -1}; 
-		tf::Vector3 corner1 = {-1, -0.165, 1};
-		tf::Vector3 corner2 = {1, -0.165, 1};
-		tf::Vector3 corner3 = {1, -0.165, -1};
+		tf::Vector3 corner0 = {-1, -0.16, -1}; 
+		tf::Vector3 corner1 = {-1, -0.16, 1};
+		tf::Vector3 corner2 = {1, -0.16, 1};
+		tf::Vector3 corner3 = {1, -0.16, -1};
 		tf::Vector3 navCenter = {newCoord.pose.position.x, newCoord.pose.position.y, newCoord.pose.position.z};
 
 		tf::Vector3 correctedVector0 = navCenter + corner0;
