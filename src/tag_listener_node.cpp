@@ -96,10 +96,10 @@ bool buildPositionVisible (tf::StampedTransform const tagTransform, tf::StampedT
 //This array is fugly because I need it to be 4 long for the quaternions.
 // Make sure you add the correct amount of positions when changing numberOfBoxes
 // IMPORTANT: if you ADD positions, you have to change the numberOfPositions accordingly.
-const double posArray[12][4] = {{0,		0,		-0.8,		0},	// Position of first box
-		{0,		0.345,	-0.8,		0}, 							// Position of second box
-		{-0.345,		0,	-0.8,	0}, 								//
-		{0,		0,		-0.8+0.34,	0}, 								//
+const double posArray[12][4] = {{3,		0,		-0.8,		0},	// Position of first box
+		{3,		0.345,	-0.8,		0}, 							// Position of second box
+		{3-0.345,		0,	-0.8,	0}, 								//
+		{3,		0,		-0.8+0.34,	0}, 								//
 		{0.345,		0,		-0.8,	0}, 								//
 		{0,	0,	-0.8+0.34+0.34,		0},									// You got it, position of sixth box.
 
@@ -394,11 +394,11 @@ int main(int argc, char **argv)
 				coordSet = true;
 				newCoordPublisher.publish(newCoord);
 			}
-			tf::matrixEigenToMsg(eigenCorners, stdCorners);
-			cornerPublisher.publish(stdCorners);	
+				
 		}
 
-
+		tf::matrixEigenToMsg(eigenCorners, stdCorners);
+		cornerPublisher.publish(stdCorners);
 		eigenIndex = 0;
 		std::vector<int>().swap(eigenIndexVec);
 		std::vector<int>().swap(boxVisible);
@@ -728,10 +728,13 @@ void fetchCorners(tf::StampedTransform const transform, int i, int id, int p, in
 		eigenCorners(i,13) = p; //property of corners, used in projection mapping to determine property of projection (red, green etc)
 
 		// Create four vectors pointing at bottom corners of box from tag center (assuming box is ~0.34x0.34x0.34m).
+		// x = depth
+		// y = width
+		// z = height
 		corner0 = {-0.165, -0.165, -0.165}; 
-		corner1 = {-0.165, -0.165, 0.165};
-		corner2 = {0.165, -0.165, 0.165};
-		corner3 = {0.165, -0.165, -0.165};
+		corner1 = {0.165, -0.165, -0.165};
+		corner2 = {-0.165, 0.165, -0.165};
+		corner3 = {0.165, 0.165, -0.165};
 
 		tf::Vector3 buildCenter = {posArray[buildNumber][0], posArray[buildNumber][1], posArray[buildNumber][2]};
 
