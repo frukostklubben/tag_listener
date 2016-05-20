@@ -36,10 +36,9 @@
 
 
 //This program listens to the transforms of tags sent by the modified ar_track_alvin node and places them in a frame of users choice.
-// it also publishes the four front-facing corners of a detected "box" for use with the projection mapping. The bottom corners of a buildPosition
-  // is also published for the projection mapping
+// it also publishes the four front-facing corners of a detected "box" for use with the projection mapping.
 
-// If someone who reads this actually know C++ and think I should make header files to handle all my methods, you're probably correct.
+// If someone who reads this actually know C++ and think I should make header files to handle all my functions, you're probably correct.
 // but hey, don't fix what isn't broken.
 
 
@@ -70,6 +69,7 @@
 #include <eigen_conversions/eigen_msg.h>
 
 #define pi 3.1415
+#define size2 6
 
 
 //void sortAscending(int id);
@@ -96,7 +96,7 @@ bool buildPositionVisible (tf::StampedTransform const tagTransform, tf::StampedT
 //This array is fugly because I need it to be 4 long for the quaternions.
 // Make sure you add the correct amount of positions when changing numberOfBoxes
 // IMPORTANT: if you ADD positions, you have to change the numberOfPositions accordingly.
-const double posArray[12][4] = {{3,		0,		-0.76,		0},	// Position of first box (z = -0.76 for floor with camera_link)
+const double posArray[12][4] = {{3,		0,		-0.76,		0},	// Position of first box
 		{3,			0.342,	-0.76,				0}, 							// Position of second box
 		{3-0.342,		0,	-0.76,				0}, 								//
 		{3,				0,	-0.76+0.32,			0}, 								//
@@ -116,7 +116,7 @@ const double posArray[12][4] = {{3,		0,		-0.76,		0},	// Position of first box (z
 int numberOfPositions = 6;
 
 // Position error margin for box (radius of error sphere) in meters.
-double posHysteresis = 0.15;
+double posHysteresis = 0.125;
 
 //Rotation error margin for box for handling only ONE axis, use: sin(ANGLE_IN_RADIANS/2). For more than 1 axis, you'll have to read about quaternions.
 double rotHysteresis = sin((5*pi)/360);
@@ -144,11 +144,6 @@ tf::StampedTransform transform_marker_0, transform_marker_1, transform_marker_2,
 tf::StampedTransform transArray[] = {transform_marker_0, transform_marker_1, transform_marker_2,
 		transform_marker_3, transform_marker_4, transform_marker_5};
 
-tf::StampedTransform transform_camera_0, transform_camera_1, transform_camera_2, transform_camera_3, transform_camera_4, transform_camera_5;
-
-tf::StampedTransform transCameraArray[] = {transform_camera_0, transform_camera_1, transform_camera_2,
-		transform_camera_3, transform_camera_4, transform_camera_5};
-
 // You're done here.
 
 //****************************************************************************
@@ -169,7 +164,7 @@ visualization_msgs::Marker marker;
 geometry_msgs::PoseStamped newCoord;
 
 // Keep track of whether box is placed correct or not
-std::vector<int> boxPlaced(1);
+std::vector<bool> boxPlaced(1);
 
 // Container of all the front facing corners of all boxes
 Eigen::MatrixXd eigenCorners;
@@ -179,6 +174,7 @@ int numberOfBoxes = 1;
 
 // Keep track of how far into the build we are.
 int buildNumber = 1;
+
 
 //Keep track of number of positions recieved for each tag
 //std::vector<int> numberOfDataPoints;
@@ -194,7 +190,6 @@ int buildNumber = 1;
 
 int main(int argc, char **argv)
 {
-	
 	bool notDone = true;
 	std::string navigate;
 	// init the ros node
@@ -206,11 +201,12 @@ int main(int argc, char **argv)
 	// create a transform that will be a copy of the transform between map and tag
 	tf::TransformListener tagListener;
 	tf::TransformListener robotListener;
-	tf::TransformListener cameraListener;
 
 	markerArray.markers.resize(numberOfPositions + 1);
 	size = markerArray.markers.size() - 1;
 	
+
+	int eigenIndex = 0;
 	std::vector<int> eigenIndexVec(1);
 	std::vector<int> boxVisible(0);
 	int nrOfVisibleBoxes = 0;
@@ -218,9 +214,11 @@ int main(int argc, char **argv)
 	bool buildPosVis = true;
 	bool coordSet = false;
 
+
+
 	// create the publisher of the markerArray
 	ros::Publisher markerPublisher = pubNodehandle.advertise<visualization_msgs::MarkerArray>("tag_marker_array", 10);
-	ros::Publisher cornerPublisher = pubNodehandle.advertise<std_msgs::Float64MultiArray>("box_corners", 10);
+	ros::Publisher cornerPublisher = pubNodehandle.advertise<std_msgs::Float64MultiArray>("corners", 10);
 	//ros::Publisher nextBoxPublisher = pubNodehandle.advertise<geometry_msgs::Pose>("nextBoxPose", 10); 
 	ros::Publisher newCoordPublisher = pubNodehandle.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal", 1);
 	ros::Publisher goalPublisher = pubNodehandle.advertise<visualization_msgs::Marker>("goal_marker", 1);
@@ -245,7 +243,7 @@ int main(int argc, char **argv)
 	std::cin >> navigate;
 	std::cout << "You answered " << navigate.c_str() << "." << std::endl;
 	//std::cout << "What coordinate system do you want to place the boxes in? \n" << "To use the global one, type: /map \n" 
-	//<< "To use the Kinect's, type: /	 \n" << std::endl;
+	//<< "To use the Kinect's, type: /camera_link \n" << std::endl;
 	//std::cin >> frame_id;
 
 	/*std::time_t timeStart = time(NULL);
@@ -257,9 +255,6 @@ int main(int argc, char **argv)
 	}*/
 	std::cout << "\n \n" << "Game started! Good luck!" << std::endl;
 
-	//Convert the Eigen::MatrixXd to a ros message, Float64MultiArray to allow it to be published
-	std_msgs::Float64MultiArray stdCorners;
-
 	//ROS_INFO("Publishing markers to /tag_marker_array");
 	//ROS_INFO("Publishing corners to /corners");
 	//ROS_INFO("Listening to transform between %s%s" , frame_id.c_str(), " and ar_transform_N");
@@ -268,26 +263,27 @@ int main(int argc, char **argv)
 	// Sort of actual main()
 	while(ros::ok() && notDone)
 	{
-		double begin = ros::Time(0).now().toSec();		
+
+		//std::time_t timer = time(NULL);		
 		for (int looper = 0 ; looper < 6 ; looper++) // The number 6 is the number of availale tags to loop through, 
 		//if not high enough it will look for a specific one. Also, this must not be higher than the length of your markerNameArray() etc
 		{
 			if (tagListener.canTransform(frame_id, transNameArray[looper], ros::Time(0)) 
 				)//&& robotListener.canTransform("/map", "/camera_link", ros::Time(0)))
 			{
+				//std::cout << "Found a transform! \n";
 				try // This try is pretty large, but hey, it works...
 				{
 					//robotListener.waitForTransform("/map", "/camera_link", ros::Time(0), ros::Duration(0,1));
 					//robotListener.lookupTransform("/map", "/camera_link", ros::Time(0), robotTransform);
 
 					tagListener.waitForTransform(frame_id , transNameArray[looper], ros::Time(0), ros::Duration(0.1));
-					//cameraListener.waitForTransform("camera_link", transNameArray[looper], ros::Time(), ros::Duration(0.1));
 					tagListener.lookupTransform(frame_id, transNameArray[looper], ros::Time(0), transArray[looper]);
-					//cameraListener.lookupTransform("camera_link", transNameArray[looper], ros::Time(0), transCameraArray[looper]);
 					// Fetch and filter position data here!! Somehow.. change all the transArray[looper] for Pose stuff after filterPosition
 					//if (filterPosition(transArray[looper], looper))
 					//{
-					if ((ros::Time(0).now().toSec() - transArray[looper].stamp_.toSec()) < 0.4)
+					
+					if ((ros::Time(0).now().toSec() - transArray[looper].stamp_.toSec()) < 0.25)
 					{
 						if(!(std::find(boxVisible.begin(), boxVisible.end(), looper) != boxVisible.end()))
 						{
@@ -295,59 +291,65 @@ int main(int argc, char **argv)
 							nrOfVisibleBoxes = boxVisible.size();
 							//boxVisible.resize(nrOfVisibleBoxes); // Shouldn't be needed because push_back
 							boxPlaced.resize(buildNumber+1);
+							//eigenIndexVec.resize(nrOfVisibleBoxes);
 							eigenCorners.conservativeResize(nrOfVisibleBoxes+1, 14);
 						}
-							for (int k = 0 ; k < nrOfVisibleBoxes ; k++)
+	
+							for (int k = nrOfVisibleBoxes ; k > 0 ; k--)
 							{
 								for (int j = buildNumber ; j > 0 ; j--)
 								{
-									if (boxInCorrectPlace(transArray[boxVisible[k]], j)) 
+									// Need to loop through all build numbers as before
+									if (boxInCorrectPlace(transArray[looper], j)) 
 									{
-										makeMarkerArray(transArray[boxVisible[k]], markerNameArray[boxVisible[k]], j, 0, 1 ,0 ,1 ,looper, false);
-										//if (!(std::find(eigenIndexVec.begin(), eigenIndexVec.end(), boxVisible[k]) != eigenIndexVec.end()))
-										//{	
-											//std::cout << "Green box" << std::endl;
-											fetchCorners(transArray[boxVisible[k]], k, boxVisible[k], -1, buildNumber-1, false); //k
-											eigenIndexVec.push_back(boxVisible[k]);
-											//eigenIndex++;
-										//}
-										//buildPosVis = buildPositionVisible(transArray[boxVisible[k]], robotTransform, buildNumber); 
-										if (boxPlaced.at(j-1) != boxVisible[k])
+										makeMarkerArray(transArray[looper], markerNameArray[looper], j, 0, 1 ,0 ,1 ,looper, false);
+										
+										if (!(std::find(eigenIndexVec.begin(), eigenIndexVec.end(), looper) != eigenIndexVec.end()))
 										{
-											boxPlaced.at(j-1) = boxVisible[k];
+											
+										fetchCorners(transArray[looper], eigenIndex, j-1, -1, buildNumber-1, false);
+											eigenIndexVec.push_back(looper);
+											eigenIndex++;
+										}
+										buildPosVis = buildPositionVisible(transArray[looper], robotTransform, buildNumber); 
+										//std::cout << "looper = "<< looper << std::endl;
+										//std::cout << "j - 1 = " << j-1 << std::endl;
+										if (!boxPlaced.at(j-1))
+										{
+											boxPlaced.at(j-1) = true;
 											if (buildNumber-1 < numberOfBoxes)
 											{
-												buildNumber++;	
+												buildNumber++;
+													
 											} else {
 												notDone = false;
 												std::cout << "All done, congratulations!" << std::endl;
-												eigenCorners.resize(1,14); //Lagt till 20160513 för att nollställa datan till project-mapping / Andreas													och ta bort den sista gröna byggplatsen
-												for(int c=0;c<11;c++) //Ditto
-													eigenCorners(0,c)=0.0; //Ditto
-												eigenCorners(0,12)=-1.0; //Ditto
-												eigenCorners(0,13)=0.0; //Ditto
-			
 											}
+
 										}// end of if(boxPlaced)
+										
 										else break; // Needs to be here to not break shit. No clue......
 									} else if (notDone)// end of if
 									{
-										makeMarkerArray(transArray[boxVisible[k]], markerNameArray[boxVisible[k]], buildNumber, 1, 0 ,0 ,0.5 ,looper, true);
-										if (!(std::find(eigenIndexVec.begin(), eigenIndexVec.end(), boxVisible[k]) != eigenIndexVec.end()))
-										{
-											fetchCorners(transArray[boxVisible[k]], k, boxVisible[k], 0, buildNumber-1, false); //k
-											eigenIndexVec.push_back(boxVisible[k]);
-										}											
-										if (boxPlaced.at(j-1) == boxVisible[k] && buildNumber-1 > 0)
-										{
-											buildNumber--;
-										}
+										//std::cout << "Made it to red box markerMaker \n";
+
+										makeMarkerArray(transArray[looper], markerNameArray[looper], buildNumber, 1, 0 ,0 ,0.5 ,looper, true);
 										
+
+										if (!(std::find(eigenIndexVec.begin(), eigenIndexVec.end(), looper) != eigenIndexVec.end()))
+										{
+										fetchCorners(transArray[looper], eigenIndex, looper, 0, buildNumber-1, false);
+											eigenIndexVec.push_back(looper);
+											eigenIndex++;
+											//std::cout << "eigenIndex = "<< eigenIndex << std::endl;
+										}											
+										//boxPlaced.at(j-1) = false; //might break shit Edit: Will break shit
 									}// end of else if(notDone)
 								}// end of for (buildNumber)
 							}// end of for (visibleBoxes)
 					}// end of if data is the fresh prince of Bel-air	
 				}//end of try (transform)
+			
 	
 				catch (tf::TransformException &ex)
 				{
@@ -355,13 +357,16 @@ int main(int argc, char **argv)
 					ros::Duration(1.0).sleep();
 					continue;
 				}
+
 			} // end of if (canTransform)
+
 		} // end of for (looper)
 		//std::time_t now = time(NULL);
 		//std::cout << "This all took " << now - timer << "s" << std::endl;
 		//std::cout << "Boxes visible: " << nrOfVisibleBoxes << std::endl;
 		
-		
+		//Convert the Eigen::MatrixXd to a ros message, Float64MultiArray to allow it to be published
+		std_msgs::Float64MultiArray stdCorners;
 		//std::cout << "Didn't crash" << std::endl;
 
 		markerPublisher.publish(markerArray);
@@ -371,6 +376,7 @@ int main(int argc, char **argv)
 		if (navigate == "yes"){
 			if (!coordSet && !buildPosVis){
 				
+
 				eigenCorners.conservativeResize(nrOfVisibleBoxes+2, 14);
 
 				if (robotTransform.getOrigin().getX() < posArray[buildNumber-1][0])
@@ -384,24 +390,27 @@ int main(int argc, char **argv)
 				fetchCorners(transArray[0], nrOfVisibleBoxes,1,-3,1, true); // only interested in the -3 and bool, rest is placeholder
 				coordSet = true;
 				newCoordPublisher.publish(newCoord);
-			}	
+			}
+				
 		}
 
 		tf::matrixEigenToMsg(eigenCorners, stdCorners);
 		cornerPublisher.publish(stdCorners);
+		eigenIndex = 0;
 		std::vector<int>().swap(eigenIndexVec);
 		std::vector<int>().swap(boxVisible);
 		nrOfVisibleBoxes = 0;
 
 		ros::spinOnce();
 		loop_rate.sleep();
-		double end = ros::Time(0).now().toSec();
-		std::cout << (end-begin) << std::endl;
+
 	}// end of while / sort of actual main()
 
 	return 0;
 
 } // end of main()
+
+
 
 //Sorts the storedDataPoints[id][] ascending values..
 /*{	
@@ -670,6 +679,7 @@ bool boxInCorrectPlace(tf::StampedTransform const transform, int const i)
 		//std::cout << "false" << std::endl;
 		return false;
 	}
+
 }// End of boxInCorrectPlace()
 
 // Makes corners from the face of the tag and the bottom of it for the buildPosition.
@@ -718,10 +728,10 @@ void fetchCorners(tf::StampedTransform const transform, int const i, int const i
 		// x = depth
 		// y = width
 		// z = height
-		corner0 = {-0.165, -0.165, -0.16}; 
-		corner1 = {0.165, -0.165, -0.16};
-		corner2 = {-0.165, 0.165, -0.16};
-		corner3 = {0.165, 0.165, -0.16};
+		corner0 = {-0.16, -0.16, -0.16}; 
+		corner1 = {0.16, -0.16, -0.16};
+		corner2 = {-0.16, 0.16, -0.16};
+		corner3 = {0.16, 0.16, -0.16};
 
 		tf::Vector3 buildCenter = {posArray[buildNumber][0], posArray[buildNumber][1], posArray[buildNumber][2]};
 
@@ -730,26 +740,25 @@ void fetchCorners(tf::StampedTransform const transform, int const i, int const i
 		correctedVector2 = buildCenter + corner2;
 		correctedVector3 = buildCenter + corner3;
 
-		int lastPos = eigenCorners.rows()-1;
 
-		eigenCorners(lastPos,0) = correctedVector0.getX();
-		eigenCorners(lastPos,1) = correctedVector0.getY();
-		eigenCorners(lastPos,2) = correctedVector0.getZ();
+		eigenCorners(i+1,0) = correctedVector0.getX();
+		eigenCorners(i+1,1) = correctedVector0.getY();
+		eigenCorners(i+1,2) = correctedVector0.getZ();
 
-		eigenCorners(lastPos,3) = correctedVector1.getX();
-		eigenCorners(lastPos,4) = correctedVector1.getY();
-		eigenCorners(lastPos,5) = correctedVector1.getZ();
+		eigenCorners(i+1,3) = correctedVector1.getX();
+		eigenCorners(i+1,4) = correctedVector1.getY();
+		eigenCorners(i+1,5) = correctedVector1.getZ();
 
-		eigenCorners(lastPos,6) = correctedVector2.getX();
-		eigenCorners(lastPos,7) = correctedVector2.getY();
-		eigenCorners(lastPos,8) = correctedVector2.getZ();
+		eigenCorners(i+1,6) = correctedVector2.getX();
+		eigenCorners(i+1,7) = correctedVector2.getY();
+		eigenCorners(i+1,8) = correctedVector2.getZ();
 
-		eigenCorners(lastPos,9) = correctedVector3.getX();
-		eigenCorners(lastPos,10) = correctedVector3.getY();
-		eigenCorners(lastPos,11) = correctedVector3.getZ();
+		eigenCorners(i+1,9) = correctedVector3.getX();
+		eigenCorners(i+1,10) = correctedVector3.getY();
+		eigenCorners(i+1,11) = correctedVector3.getZ();
 
-		eigenCorners(lastPos,12) = -2; // ID for a buildPosition, used in the projection mapping
-		eigenCorners(lastPos,13) = -2; // Only ever needs one property ()
+		eigenCorners(i+1,12) = -2; // ID for a buildPosition, used in the projection mapping
+		eigenCorners(i+1,13) = -2; // Only ever needs one property ()
 	}else{
 
 		// Create four vectors pointing at bottom corners of new navigation position.
@@ -811,7 +820,7 @@ bool buildPositionVisible (tf::StampedTransform const tagTransform, tf::StampedT
  	else
  	{
  		
-		marker.header.frame_id = frame_id;
+		marker.header.frame_id = "camera_link";
 		marker.header.stamp = ros::Time();
 		marker.ns = "my_namespace";
 		marker.id = 0;
@@ -835,9 +844,3 @@ bool buildPositionVisible (tf::StampedTransform const tagTransform, tf::StampedT
   		return false;
   	}
 }
-
-
-
-
-
-
